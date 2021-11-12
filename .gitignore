@@ -1,0 +1,6 @@
+*.pyc
+build/
+dist/
+pandaplotutils.egg-info/*
+*.pickle
+
