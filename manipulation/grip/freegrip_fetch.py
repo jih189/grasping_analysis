@@ -71,16 +71,8 @@ class Freegrip(fgcp.FreegripContactpairs):
 
         # for dbupdate
         self.dbobjname = os.path.splitext(os.path.basename(objpath))[0]
-        print "db object name ", self.dbobjname
+        print("db object name ", self.dbobjname)
 
-    # def loadRtq85Models(self):
-    #     """
-    #     load the rtq85 model and its fgrprecc model
-    #     :return:
-    #     """
-    #     self.rtq85hnd = rtq85nm.Rtq85NM(hndcolor=[1, 0, 0, .1])
-    #     handfgrpccpath = Filename.fromOsSpecific(os.path.join(this_dir, "robotiq85/rtq85egg", "robotiq_85_tip_precc.egg"))
-    #     self.handfgrpcc_uninstanced = loader.loadModel(handfgrpccpath)
 
     def removeHndcc(self, base, discretesize=8):
         """
@@ -92,7 +84,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         author: weiwei
         date: 20161212, tsukuba
         """
-        print "remove hand collision check"
+        print("remove hand collision check")
 
         # isplotted = 0
 
@@ -111,8 +103,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         self.counter = 0
 
         while self.counter < self.facetpairs.shape[0]:
-            print str(self.counter) + "/" + str(self.facetpairs.shape[0]-1)
-            # print self.gripcontactpairs_precc
+            print(str(self.counter) + "/" + str(self.facetpairs.shape[0]-1))
 
             facetpair = self.facetpairs[self.counter]
             facetidx0 = facetpair[0]
@@ -185,7 +176,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         author: weiwei
         date: 20161212, tsukuba
         """
-        print "remove finger collision check"
+        print("remove finger collision check")
 
         self.gripcontactpairs_precc = []
         self.gripcontactpairnormals_precc = []
@@ -196,8 +187,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         self.counter = 0
 
         while self.counter < self.facetpairs.shape[0]:
-            print str(self.counter) + "/" + str(self.facetpairs.shape[0]-1)
-            # print self.gripcontactpairs
+            print(str(self.counter) + "/" + str(self.facetpairs.shape[0]-1))
             self.gripcontactpairs_precc.append([])
             self.gripcontactpairnormals_precc.append([])
             self.gripcontactpairfacets_precc.append([])
@@ -262,7 +252,6 @@ class Freegrip(fgcp.FreegripContactpairs):
             else:
                 sql = "INSERT INTO object(name) VALUES('%s')" % self.dbobjname
                 idobject = gdb.execute(sql)
-            # print self.gripcontacts
             for i in range(len(self.gripcontacts)):
                 sql = "INSERT INTO freeairgrip(idobject, contactpnt0, contactpnt1, \
                         contactnormal0, contactnormal1, rotmat, jawwidth, idhand) \
@@ -272,7 +261,7 @@ class Freegrip(fgcp.FreegripContactpairs):
                        dc.mat4ToStr(self.griprotmats[i]), str(self.gripjawwidth[i]), idhand)
                 gdb.execute(sql)
         else:
-            print "Grasps already saved or duplicated filename!"
+            print("Grasps already saved or duplicated filename!")
 
     def removeFgrpccShow(self, base):
         """
@@ -422,7 +411,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         if self.counter >= self.facetpairs.shape[0]:
             return
         else:
-            print str(self.counter) + "/" + str(self.facetpairs.shape[0]-1)
+            print(str(self.counter) + "/" + str(self.facetpairs.shape[0]-1))
 
             facetpair = self.facetpairs[self.counter]
             facetidx0 = facetpair[0]
@@ -491,7 +480,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         if self.counter2 >= discretesize:
             self.counter2 = 0
 
-        print str(self.counter) + "/" + str(self.facetpairs.shape[0]-1)
+        print(str(self.counter) + "/" + str(self.facetpairs.shape[0]-1))
 
         facetpair = self.facetpairs[self.counter]
         facetidx0 = facetpair[0]
@@ -499,7 +488,7 @@ class Freegrip(fgcp.FreegripContactpairs):
 
         for j, contactpair in enumerate(self.gripcontactpairs_precc[self.counter]):
             if j == 0:
-                print j, contactpair
+                print(j, contactpair)
                 # for angleid in range(discretesize):
                 angleid = self.counter2
                 cctpnt0 = contactpair[0] + plotoffsetfp * self.facetnormals[facetidx0]
@@ -651,7 +640,7 @@ if __name__=='__main__':
     #     freegriptst.removeFgrpcc(base)
     #     freegriptst.removeHndcc(base)
     #     toc = time.clock()
-    #     print toc-tic
+    #     print(toc-tic)
     #     fo.write(os.path.basename(objpath)+' '+str(toc-tic)+'\n')
     # fo.close()
 
@@ -679,7 +668,7 @@ if __name__=='__main__':
     # freegriptst.removeFgrpcc(base)
     # def updateshow(task):
     #     freegriptst.pairShow(base, togglecontacts=True, togglecontactnormals=True)
-    #     # print task.delayTime
+    #     # print(task.delayTime)
     #     # if abs(task.delayTime-13) < 1:
     #     #     task.delayTime -= 12.85
     #     return task.again
@@ -696,7 +685,7 @@ if __name__=='__main__':
     #     # freegriptst.removeFgrpccShow(base)
     #     # freegriptst.removeFgrpccShowLeft(base)
     #     freegriptst.removeHndccShow(base)
-    # #     # print task.delayTime
+    # #     # print(task.delayTime)
     # #     # if abs(task.delayTime-13) < 1:
     # #     #     task.delayTime -= 12.85
     #     return task.again

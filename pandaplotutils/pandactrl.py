@@ -87,7 +87,7 @@ class World(ShowBase, object):
     # def rotateCam(self, task):
     #     campos = self.cam.getPos()
     #     camangle = math.atan2(campos[1], campos[0])
-    #     # print camangle
+    #     # print(camangle) 
     #     if camangle < 0:
     #         camangle += math.pi*2
     #     if camangle >= math.pi*2:
@@ -247,7 +247,7 @@ class World(ShowBase, object):
 #                 rotatevec = m2downmposworld.cross(params['m1downposinworld'])
 #                 rotateangle = m2downmposworld.signedAngleDeg(params['m1downposinworld'], rotatevec)
 #                 if rotateangle > 2 or rotateangle < -2:
-#                     # print base.camera.getHpr()
+#                     # print(base.camera.getHpr())
 #                     base.camera.setPos(Mat3.rotateMat(rotateangle, rotatevec).xform(base.camera.getPos()))
 #                     base.camera.lookAt(0,0,250)
 #         return task.cont
@@ -261,7 +261,7 @@ class World(ShowBase, object):
 #                 params['m1downpos'] = Vec2(mw.getMouseX()*2*base.camera.getPos().length(), mw.getMouseY()*2*base.camera.getPos().length())
 #                 params['m1downposinworld'] = Vec3(base.render.getRelativePoint(base.camera, Vec3(params['m1downpos'][0], 0, params['m1downpos'][1])))
 #                 params['m1downposinworld'].normalize()
-#                 # print params['m2downposinworld']
+#                 # print(params['m2downposinworld'])
 #         else:
 #             params['m1down'] = False
 #
@@ -311,7 +311,7 @@ class World(ShowBase, object):
 #         # TODO: check if there is an accept event for window-event
 #         base.taskMgr.add(setAspect, "setaspect", extraArgs=[base], appendTask=True)
 #     except:
-#         print "Error Set cam"
+#         print("Error Set cam")
 #         pass
 
 # def onWindowEvent(window):

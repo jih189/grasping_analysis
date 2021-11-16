@@ -129,18 +129,18 @@ class MtlFile:
                 continue
             if line[0] == '#':
                 self.comments[linenumber] = line
-                print line
+                print(line)
                 continue
             tokens = line.split()
             if not tokens:
                 continue
-            if verbose: print "tokens[0]:", tokens
+            if verbose: print("tokens[0]:", tokens)
             if tokens[0] == "newmtl":
                 mat = ObjMaterial()
                 mat.filename = filename
                 mat.name = tokens[1]
                 self.materials[mat.name] = mat
-                if verbose: print "newmtl:", mat.name
+                if verbose: print("newmtl:", mat.name)
                 continue
             if tokens[0] in ("Ns", "d", "Tr"):
                 # "d factor" - specifies the dissovle for the current material,
@@ -173,15 +173,15 @@ class MtlFile:
                 # map_Bump == bump
                 # map_Ks == specular
                 mat.put(tokens[0], pathify(tokens[1]))
-                if verbose: print "map:", mat.name, tokens[0], mat.get(tokens[0])
+                if verbose: print("map:", mat.name, tokens[0], mat.get(tokens[0]))
                 continue
             if tokens[0] in ("Ni"):
                 # blender's .obj exporter can emit this "Ni 1.000000"
                 mat.put(tokens[0], float(tokens[1]))
                 continue
-            print "file \"%s\": line %d: unrecognized:" % (filename, linenumber), tokens
+            print("file \"%s\": line %d: unrecognized:" % (filename, linenumber), tokens)
         file.close()
-        if verbose: print "%d materials" % len(self.materials), "loaded from", filename
+        if verbose: print("%d materials" % len(self.materials), "loaded from", filename)
         return self
 
 class ObjFile:
@@ -546,7 +546,7 @@ def main(argv=None):
             if show:
                 os.system("pview " + outfile)
         except Exception,e:
-            print e
+            print(e)
     return 0
 
 if __name__ == "__main__":

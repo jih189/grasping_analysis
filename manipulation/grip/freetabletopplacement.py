@@ -306,7 +306,7 @@ class FreeTabletopPlacement(object):
                     result0 = self.bulletworldhp.contactTest(hndbullnode)
                     result1 = self.bulletworldhp1.contactTest(hndbullnode)
                     result2 = self.bulletworldhplowest.contactTest(hndbull_without_fingers_node)
-                    # print result.getNumContacts()
+                    # print(result.getNumContacts())
                     if not result0.getNumContacts() and not result1.getNumContacts() and not result2.getNumContacts():
                         self.tpsgriprotmats[-1].append(tpsgriprotmat)
                         # cct0 = self.tpsmat4s[i].xformPoint(self.freegripcontacts[j][0])
@@ -404,7 +404,7 @@ class FreeTabletopPlacement(object):
             sql = sql[:-2] + ";"
             self.gdb.execute(sql)
         else:
-            print "Freetabletopplacement already exist!"
+            print("Freetabletopplacement already exist!")
 
         # save freetabletopgrip
         idhand = gdb.loadIdHand(self.handname)
@@ -420,7 +420,7 @@ class FreeTabletopPlacement(object):
                         freetabletopplacement.rotmat LIKE '%s' AND \
                         object.name LIKE '%s'" % (dc.mat4ToStr(self.tpsmat4s[i]), self.dbobjname)
                 result = self.gdb.execute(sql)[0]
-                # print result
+                # print(result)
                 if len(result) != 0:
                     idfreetabletopplacement = result[0]
                     # note self.tpsgriprotmats[i] might be empty (no cd-free grasps)
@@ -439,7 +439,7 @@ class FreeTabletopPlacement(object):
                         sql = sql[:-2] + ";"
                         self.gdb.execute(sql)
         else:
-            print "Freetabletopgrip already exist!"
+            print("Freetabletopgrip already exist!")
 
     def removebadfacetsshow(self, base, doverh=.1):
         """
@@ -455,7 +455,7 @@ class FreeTabletopPlacement(object):
         """
 
         plotoffsetfp = 10
-        # print self.counter
+        # print(self.counter)
 
         if self.counter < len(self.ocfacets):
             i = self.counter
@@ -490,10 +490,10 @@ class FreeTabletopPlacement(object):
                 dist2p = apntpnt.distance(facetp.exterior)
                 dist2c = np.linalg.norm(np.array([hitpos[0],hitpos[1],hitpos[2]])-np.array([pFrom[0],pFrom[1],pFrom[2]]))
                 if dist2p/dist2c < doverh:
-                    print "not stable"
+                    print("not stable")
                     # return
                 else:
-                    print dist2p/dist2c
+                    print(dist2p/dist2c)
                     pol_ext = LinearRing(bdverts2d)
                     d = pol_ext.project(apntpnt)
                     p = pol_ext.interpolate(d)
@@ -600,7 +600,7 @@ class FreeTabletopPlacement(object):
         distanceBetweenObjects = 300
 
         numberOfPlacements = len(self.tpsffplacements)
-        print "number of ff placements = ", numberOfPlacements
+        print("number of ff placements = ", numberOfPlacements)
 
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
         tableHeight = 0
@@ -651,7 +651,7 @@ class FreeTabletopPlacement(object):
         distanceBetweenObjects = 350
 
         numberOfPlacements = len(self.tpsmat4s)
-        print "number of placements = ", numberOfPlacements
+        print("number of placements = ", numberOfPlacements)
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
         tableHeight = 0
         if(numberOfPlacements % tableSideLength == 0.0):
@@ -723,7 +723,7 @@ class FreeTabletopPlacement(object):
 
 
     def ocfacetshow(self, base):
-        print self.objcom
+        print(self.objcom)
 
         npf = base.render.find("**/supportfacet")
         if npf:
@@ -731,8 +731,8 @@ class FreeTabletopPlacement(object):
 
         plotoffsetfp = 10
 
-        print self.counter
-        print len(self.ocfacets)
+        print(self.counter)
+        print(len(self.ocfacets))
         if self.counter < len(self.ocfacets):
             geom = pandageom.packpandageom(self.objtrimeshconv.vertices+
                                            np.tile(plotoffsetfp*self.ocfacetnormals[self.counter],
@@ -797,7 +797,7 @@ if __name__ == '__main__':
     #     tps = FreeTabletopPlacement(objpath, gdb)
     #     tps.removebadfacets(base, doverh=.2)
     #     toc = time.clock()
-    #     print toc-tic
+    #     print(toc-tic)
     #     fo.write(os.path.basename(objpath)+' '+str(toc-tic)+'\n')
     # fo.close()
 
@@ -859,6 +859,6 @@ if __name__ == '__main__':
     tps.showAllPlacementAndAssociatedGrips(base)
     # tps.showAllFFPlacement(base)
 
-    # print "check ", tps.planebullnode.findAllMatches("**/+GeomNode")
+    # print("check ", tps.planebullnode.findAllMatches("**/+GeomNode"))
 
     base.run()

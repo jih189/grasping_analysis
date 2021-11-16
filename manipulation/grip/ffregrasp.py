@@ -139,7 +139,7 @@ class dexterousManipulationGraph:
         try:
             return nx.shortest_path(self.Graph,st_grasp_idx,ed_grasp_idx)
         except Exception as e:
-            print e
+            print(e)
             return None
        
     def getGraspTrajectory(self):
@@ -269,7 +269,7 @@ class ff_regrasp_planner(object):
         sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % self.dbobjname
         result = gdb.execute(sql)
         if not result:
-            print "please add the object name to table first!!!"
+            print("please add the object name to table first!!!")
             return
         else:
             objectId = int(result[0][0]) 
@@ -294,7 +294,7 @@ class ff_regrasp_planner(object):
         result = gdb.execute(sql)
 
         if not result:
-            print "save the DMG table to database"
+            print("save the DMG table to database")
             for p in tqdm(range(len(self.regrasp_graph))):
                 for i_plane in range(len(self.regrasp_graph[p])):
                     dmg = self.regrasp_graph[p][i_plane][1]
@@ -342,7 +342,7 @@ class ff_regrasp_planner(object):
                     currentIndexOfDmgs += 1
 
         else:
-            print "Dmg already saved or duplicated filename!"
+            print("Dmg already saved or duplicated filename!")
 
     # this function will load the dmg table from databse
     def loadDB(self):
@@ -353,7 +353,7 @@ class ff_regrasp_planner(object):
         sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % self.dbobjname
         result = gdb.execute(sql)
         if not result:
-            print "No such object exist in databse!!!"
+            print("No such object exist in databse!!!")
             return
         else:
             objectId = int(result[0][0]) 
@@ -396,7 +396,7 @@ class ff_regrasp_planner(object):
                 self.regrasp_graph[placementid].append((np.array(dc.strToV6(planevector_str)), dexterousManipulationGraph(anglerange_list, dmg_edges, True)))
 
         else:
-            print "the dmg table of ", self.dbobjname, " does not exist!!"
+            print("the dmg table of ", self.dbobjname, " does not exist!!")
 
     def loadFreeTabletopPlacement(self):
         freetabletopplacementdata = self.gdb.loadFreeTabletopPlacementIncludeFF(self.dbobjname)
@@ -412,7 +412,6 @@ class ff_regrasp_planner(object):
         sql = "SELECT freetabletopgrip.rotmat, freetabletopgrip.jawwidth, freetabletopgrip.contactpoint0, freetabletopgrip.contactpoint1 FROM freetabletopgrip WHERE \
                 freetabletopgrip.idfreetabletopplacement=%d" % placementid
         result = self.gdb.execute(sql)
-        # print "number of grips = ", len(result)
         for resultrow in result:
             handrotmat.append(dc.strToMat4(resultrow[0]))
             hndjawwidth.append(float(resultrow[1]))
@@ -691,11 +690,6 @@ class ff_regrasp_planner(object):
 
             angleMask.append(result)
 
-        # for a in range(len(angleSet)):
-        #     print "---------------------------------"
-        #     print angleSet[a]
-        #     print "----------"
-        #     print angleMask[a]
         return angleSet, angleMask
 
     def get_contact_point_edge_by_voronoi(self, grasp_point_pairs, plane):
@@ -787,9 +781,6 @@ class ff_regrasp_planner(object):
                 for j in range(len(angleMask[idx2])):
                     isConnect, commonBit = self.getCommonBit(angleMask[idx1][i], angleMask[idx2][j])# we may also store the common edges grasps
 
-                    # if not isConnect:
-                    #     print "check bits ", angleMask[idx1][i], angleMask[idx2][j]
-                    #     print "result ", isConnect, commonBit
                     if isConnect:
                         angleRange_edges.append(((idx1, i),(idx2,j),commonBit))
         
@@ -807,18 +798,12 @@ class ff_regrasp_planner(object):
                 angleRange[i].append(newAngleRange)
 
         # build the DMG with angleRange and angleRange_edges
-        # print(angleRange_edges)
-        # for pointpair in angleRange:
-        #     for a in pointpair:
-        #         print "-----------"
-        #         for g in a: 
-        #             print PandaPosMax_t_PosMat(g)
         DMG = dexterousManipulationGraph(angleRange,angleRange_edges)
         return DMG
 
 
     def build_regrasp_graph_for_all_placements(self, base):
-        print "number of placement = ", len(self.tpsmat4s)
+        print("number of placement = ", len(self.tpsmat4s))
         self.regrasp_graph = [[] for _ in range(len(self.tpsmat4s))]
         for placementid, placement in enumerate(tqdm(self.tpsmat4s)):
             # if placementid != 2: # you can choose to build only selected dmg by uncommon here
@@ -989,10 +974,10 @@ class ff_regrasp_planner(object):
         self.renderObject(base, self.tpsmat4s[placementid])
 
         if init_grasp_plane_id == None or target_grasp_plane_id == None:
-            print "init grasp or target grasp does not belong to any plane"
+            print("init grasp or target grasp does not belong to any plane")
             return None
         if init_grasp_plane_id != target_grasp_plane_id:
-            print "init grasp and target grasp does not share the same plane"
+            print("init grasp and target grasp does not share the same plane")
             return None
 
         dmg = self.regrasp_graph[placementid][init_grasp_plane_id][1]

@@ -12,7 +12,7 @@ import math
 import trimesh
 
 import matplotlib.pyplot as plt
-import geopandas as gpd
+# import geopandas as gpd
 
 class PandaGeomGen(object):
     """

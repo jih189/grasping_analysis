@@ -41,11 +41,11 @@ if __name__ == '__main__':
     grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)).dot(rotationMatrix180), inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)).dot(rotationMatrix180), 0.08, PandaPosMax_t_PosMat(placementPose), base)
 
     if grasp_trajectory == None:
-        print "no path between init grasp to target grasp"
+        print("no path between init grasp to target grasp")
         exit()
 
     poseTrajectory = []
-    print "len of grasp = ", len(grasp_trajectory)
+    print("len of grasp = ", len(grasp_trajectory))
     for g in range(len(grasp_trajectory) - 1):
         trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]).dot(rotationMatrix180), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]).dot(rotationMatrix180))
         poseTrajectory.extend(trajectory)

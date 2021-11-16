@@ -22,7 +22,7 @@ class GraspDB(object):
         try:
             self.cursor.execute(sql)
         except mdb.Error as e:
-            print "MySQL Error [%d]: %s" % (e.args[0], e.args[1])
+            print("MySQL Error [%d]: %s" % (e.args[0], e.args[1]))
             self.dbconnection.rollback()
             raise mdb.Error
 
@@ -49,7 +49,7 @@ class GraspDB(object):
             self.cursor.execute("SET SQL_SAFE_UPDATES = 1")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
         except mdb.Error as e:
-            print "MySQL Error [%d]: %s" % (e.args[0], e.args[1])
+            print("MySQL Error [%d]: %s" % (e.args[0], e.args[1]))
             self.dbconnection.rollback()
             self.cursor.execute("SET SQL_SAFE_UPDATES = 1")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
@@ -117,7 +117,7 @@ class GraspDB(object):
 
             return tpsmat4s
         else:
-            print "Plan tabletoplacements using freetabletopplacement.removebadfacets first!"
+            print("Plan tabletoplacements using freetabletopplacement.removebadfacets first!")
             return None
 
     def loadFreeTabletopPlacementIncludeFF(self, objname):
@@ -149,7 +149,7 @@ class GraspDB(object):
 
             return tpsmat4s, placementid, placementtype
         else:
-            print "Plan tabletoplacements using freetabletopplacement.removebadfacets first!"
+            print("Plan tabletoplacements using freetabletopplacement.removebadfacets first!")
             return None, None, None
 
     def loadIKRet(self):
@@ -175,7 +175,6 @@ class GraspDB(object):
     def loadIdHand(self, handname):
         sql = "SELECT idhand FROM hand WHERE name = '%s'" % handname
         result = self.execute(sql)
-        # print result
         if len(result) != 0:
             idhand = int(result[0][0])
         else:
@@ -255,7 +254,7 @@ class GraspDB(object):
         idrobot = self.loadIdRobot(robot)
         idobj = self.loadIdObject(objname)
         idhand = self.loadIdHand(handname)
-        print idobj, idhand
+        print(idobj, idhand)
         # delete freeairgrip
         sql = "DELETE FROM freeairgrip \
                 WHERE freeairgrip.idobject = %d AND \

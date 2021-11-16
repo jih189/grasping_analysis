@@ -43,7 +43,7 @@ if __name__ == '__main__':
     sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % os.path.splitext(os.path.basename(objpath))[0]
     result = gdb.execute(sql)
     if not result:
-        print "please add the object name to table first!!!"
+        print("please add the object name to table first!!!")
         exit()
     else:
         objectId = int(result[0][0]) 
@@ -68,11 +68,11 @@ if __name__ == '__main__':
     fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(np.array([[1,0,0,0.02], [0,1,0,0], [0,0,1,0], [0,0,0,1]])))
     fetchhnd.reparentTo(base.render)
 
-    print "w,s,a,d,q,e: translation"
-    print "8,2,4,6,7,9: rotation"
-    print "z: open gripper"
-    print "c: close gripper"
-    print "x: print pose"
+    print("w,s,a,d,q,e: translation")
+    print("8,2,4,6,7,9: rotation")
+    print("z: open gripper")
+    print("c: close gripper")
+    print("x: print pose")
 
     def shift(pose):
         return pose.dot(np.array([[1,0,0,-0.02], [0,1,0,0], [0,0,1,0], [0,0,0,1]]))
@@ -213,8 +213,8 @@ if __name__ == '__main__':
     base.accept('c-repeat', eventC)
 
     def eventX():
-        print dc.mat4ToStr(fetchhnd.getMat())
-        print str(fetchhnd.jawwidth)
+        print(dc.mat4ToStr(fetchhnd.getMat()))
+        print(str(fetchhnd.jawwidth))
 
         sql = "INSERT INTO initgrasps(idobject, grasppose, jawwidth) \
                                 VALUES('%d', '%s', '%s')" % \
