@@ -81,6 +81,7 @@ class World(ShowBase, object):
         self.inputmgr.checkMouse1Drag()
         self.inputmgr.checkMouse3Drag()
         self.inputmgr.checkMouseWheel()
+        self.inputmgr.rotateCamPlane()
         return task.cont
 
     def rotateCam(self, task):

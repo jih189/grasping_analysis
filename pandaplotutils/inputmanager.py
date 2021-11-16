@@ -9,6 +9,8 @@ class InputManager(DirectObject):
     def __init__(self, pandabase, lookatp):
         self.pandabase = pandabase
         self.lookatp = Vec3(lookatp[0], lookatp[1], lookatp[2])
+        self.focusPoint = Vec3(lookatp[0], lookatp[1], lookatp[2])
+        self.moveScale = 50.0
         self.initviewdist = self.pandabase.cam.getPos().length()
         self.lastm1pos = None
         self.lastm2pos = None
@@ -30,6 +32,19 @@ class InputManager(DirectObject):
     def __setKey(self, key, value):
         self.keyMap[key] = value
         return
+
+    def rotateCamPlane(self):
+
+        camPosX = self.pandabase.cam.getX() + 1000 * self.pandabase.cam.getMat()(1, 0)
+        camPosY = self.pandabase.cam.getY() + 1000 * self.pandabase.cam.getMat()(1, 1)
+        camPosZ = self.pandabase.cam.getZ() + 1000 * self.pandabase.cam.getMat()(1, 2)
+        self.camPlaneCN.setPos(camPosX, camPosY, camPosZ)
+        self.camPlaneCN.lookAt(self.pandabase.cam)
+        #self.aimSphereCN.setPos(camPosX, camPosY, camPosZ)
+        self.focusPoint[0] = camPosX
+        self.focusPoint[1] = camPosY
+        self.focusPoint[2] = camPosZ
+        self.aimSphereCN.setPos(self.focusPoint[0], self.focusPoint[1], self.focusPoint[2])
 
     def setupMouseAim(self):
         """
@@ -57,12 +72,12 @@ class InputManager(DirectObject):
         # its bitmask is set to 8, and it will be the only collidable object at bit 8
         # the collision node is attached to the render so that it will NOT move with the camera
         self.aimSphereCN = CollisionNode("aimSphereCN")
-        self.aimSphere = CollisionSphere(self.lookatp[0], self.lookatp[1], self.lookatp[2], camdist*.6)
+        # self.aimSphere = CollisionSphere(self.lookatp[0], self.lookatp[1], self.lookatp[2], camdist*.6)
+        self.aimSphere = CollisionSphere(0, 0, 0, 600.0)
         self.aimSphereCN.addSolid(self.aimSphere)
         self.aimSphereCN.setFromCollideMask(BitMask32.allOff())
         self.aimSphereCN.setIntoCollideMask(BitMask32.bit(8))
         self.aimSphereCN = self.pandabase.render.attachNewNode(self.aimSphereCN)
-        # self.aimSphereCN.show()
 
         # This creates a collision plane
         self.aimPlaneCN = CollisionNode("aimPlaneCN")
@@ -72,6 +87,17 @@ class InputManager(DirectObject):
         self.aimPlaneCN.setIntoCollideMask(BitMask32.bit(8))
         self.aimPlaneCN = self.pandabase.render.attachNewNode(self.aimPlaneCN)
         # self.aimPlaneCN.show()
+
+        # This creates a collision plane
+        self.camPlaneCN = CollisionNode("camPlaneCN")
+        #self.camPlane = CollisionPlane(Plane(Vec3(0, 0, 1), self.lookatp))
+        self.camPlane = CollisionPlane(Plane(Vec3(0.0, 1.0, 0.0), (0,0,0)))#self.pandabase.cam.getPos()))
+        self.camPlaneCN.addSolid(self.camPlane)
+        self.camPlaneCN.setFromCollideMask(BitMask32.allOff())
+        self.camPlaneCN.setIntoCollideMask(BitMask32.bit(8))
+        self.camPlaneCN = self.pandabase.render.attachNewNode(self.camPlaneCN)
+        self.camPlaneCN.setScale(10)
+        # self.camPlaneCN.show()
 
         # creates a traverser to do collision testing
         self.cTrav = CollisionTraverser()
@@ -123,8 +149,10 @@ class InputManager(DirectObject):
             # first time click
             self.lastm1pos = curm1pos
             return
-        curm1vec = Vec3(curm1pos-self.lookatp)
-        lastm1vec = Vec3(self.lastm1pos-self.lookatp)
+        # curm1vec = Vec3(curm1pos-self.lookatp)
+        # lastm1vec = Vec3(self.lastm1pos-self.lookatp)
+        curm1vec = Vec3(curm1pos-self.focusPoint)
+        lastm1vec = Vec3(self.lastm1pos-self.focusPoint)
         curm1vec.normalize()
         lastm1vec.normalize()
         rotatevec = curm1vec.cross(lastm1vec)
@@ -136,9 +164,10 @@ class InputManager(DirectObject):
             rotmat.setRow(3, Vec3(0,0,0))
             self.pandabase.cam.setMat(rotmat*Mat4.rotateMat(rotateangle, rotatevec))
             self.pandabase.cam.setPos(Mat3.rotateMat(rotateangle, rotatevec).\
-                                      xform(posvec - self.lookatp) + self.lookatp)
+                                      xform(posvec - self.focusPoint) + self.focusPoint)
             self.lastm1pos = self.getMouse1Aim()
 
+    # the mouse2 here is not right click
     def getMouse2Aim(self):
         if self.pandabase.mouseWatcherNode.hasMouse():
             if self.keyMap['mouse2']:
@@ -175,17 +204,17 @@ class InputManager(DirectObject):
                 self.last2mpos = self.getMouse2Aim()
                 if self.rotatecenternp is not None:
                     self.rotatecenternp.detachNode()
-                # self.rotatecenternp = pg.plotDumbbell(self.pandabase.render, \
-                #                                      np.array([self.lookatp[0], self.lookatp[1], self.lookatp[2]]), \
-                #                                      np.array([self.lookatp[0], self.lookatp[1], self.lookatp[2]]), \
-                #                                      thickness=10, rgba = np.array([1,1,0,0]), plotname = "transcenter")
+                self.rotatecenternp = pg.plotDumbbell(self.pandabase.render, \
+                                                     np.array([self.lookatp[0], self.lookatp[1], self.lookatp[2]]), \
+                                                     np.array([self.lookatp[0], self.lookatp[1], self.lookatp[2]]), \
+                                                     thickness=10, rgba = np.array([1,1,0,0]), plotname = "transcenter")
 
     def getMouse3Aim(self):
         if self.pandabase.mouseWatcherNode.hasMouse():
-            if self.keyMap['mouse3']:
+            if self.keyMap['mouse3'] and not self.keyMap['mouse1']: # ensure you can't do two kinds of manipulation at the same time
                 mpos = self.pandabase.mouseWatcherNode.getMouse()
                 self.cRay.setFromLens(self.pandabase.cam.node(), mpos.getX(), mpos.getY())
-                self.cTrav.traverse(self.aimPlaneCN)
+                self.cTrav.traverse(self.camPlaneCN)
                 self.cHanQ.sortEntries()
 
                 if (self.cHanQ.getNumEntries() > 0):
@@ -196,7 +225,8 @@ class InputManager(DirectObject):
 
     def checkMouse3Drag(self):
         curm3pos = self.getMouse3Aim()
-        if curm3pos is None:
+        
+        if curm3pos is None:# the mouse3 is not clicked now.
             if self.lastm3pos is not None:
                 self.lastm3pos = None
             return
@@ -225,21 +255,32 @@ class InputManager(DirectObject):
     def checkMouseWheel(self):
         if self.keyMap["wheel_up"] is True:
             self.keyMap["wheel_up"] = False
-            forward = self.pandabase.cam.getPos()-self.lookatp
-            forward.normalize()
-            if (self.pandabase.cam.getPos()-self.lookatp).length() < self.initviewdist*20:
-                newpos = self.pandabase.cam.getPos() + forward* 100
-                self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
-                self.changeCollisionSphere(self.aimSphere.getCenter(), self.aimSphere.getRadius()+50)
-                # self.pandabase.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])
+
+            newpos = self.pandabase.cam.getPos() + Vec3(self.pandabase.cam.getMat()(1, 0) * self.moveScale, 
+                                                        self.pandabase.cam.getMat()(1, 1) * self.moveScale,
+                                                        self.pandabase.cam.getMat()(1, 2) * self.moveScale)
+            self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
+
+
+            # forward = self.pandabase.cam.getPos()-self.lookatp
+            # forward.normalize()
+            # if (self.pandabase.cam.getPos()-self.lookatp).length() < self.initviewdist*20:
+            #     newpos = self.pandabase.cam.getPos() + forward * 100
+            #     self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
+            #     self.changeCollisionSphere(self.aimSphere.getCenter(), self.aimSphere.getRadius()+50)
+            #     # self.pandabase.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])
         if self.keyMap["wheel_down"] is True:
             self.keyMap["wheel_down"] = False
-            forward = self.pandabase.cam.getPos()-self.lookatp
-            forward.normalize()
-            if (self.pandabase.cam.getPos()-self.lookatp).length() > self.initviewdist*.05:
-                newpos = self.pandabase.cam.getPos() - forward* 100
-                self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
-                camdist = self.pandabase.cam.getPos().length()
-                self.changeCollisionSphere(self.aimSphere.getCenter(), camdist*.6)
-                # self.changeCollisionSphere(self.aimSphere.getCenter(), self.aimSphere.getRadius()-50)
-                # self.pandabase.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])
+            newpos = self.pandabase.cam.getPos() - Vec3(self.pandabase.cam.getMat()(1, 0) * self.moveScale, 
+                                                        self.pandabase.cam.getMat()(1, 1) * self.moveScale, 
+                                                        self.pandabase.cam.getMat()(1, 2) * self.moveScale)
+            self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
+            # forward = self.pandabase.cam.getPos()-self.lookatp
+            # forward.normalize()
+            # if (self.pandabase.cam.getPos()-self.lookatp).length() > self.initviewdist*.05:
+            #     newpos = self.pandabase.cam.getPos() - forward* 100
+            #     self.pandabase.cam.setPos(newpos[0], newpos[1], newpos[2])
+            #     camdist = self.pandabase.cam.getPos().length()
+            #     self.changeCollisionSphere(self.aimSphere.getCenter(), camdist*.6)
+            #     # self.changeCollisionSphere(self.aimSphere.getCenter(), self.aimSphere.getRadius()-50)
+            #     # self.pandabase.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])

@@ -609,7 +609,7 @@ if __name__=='__main__':
     #     world.doPhysics(globalClock.getDt())
     #     return task.cont
 
-    base = pandactrl.World(camp=[700,300,700], lookatp=[0,0,100])
+    base = pandactrl.World(camp=[700,300,700], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
     # objpath = os.path.join(this_dir, "objects", "sandpart.stl")
     # objpath = os.path.join(this_dir, "objects", "ttube.stl")
