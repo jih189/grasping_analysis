@@ -351,7 +351,7 @@ if __name__=='__main__':
         world.doPhysics(globalClock.getDt())
         return task.cont
 
-    base = pandactrl.World(lookatp=[0,0,0])
+    base = pandactrl.World(camp=[0,0,600], lookatp=[0,0,0], focusLength=600)
     fetchhnd = Fetch_gripperNM(hndcolor=[.5,.5,0.5,.7])
     # test
     fetchhnd.reparentTo(base.render)

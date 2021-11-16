@@ -10,7 +10,7 @@ import math
 
 class World(ShowBase, object):
 
-    def __init__(self, camp=[2000,500,2000], lookatp=[0,0,250], up = [0,0,1], fov = 40, w = 2000, h = 1500):
+    def __init__(self, camp=[2000,500,2000], lookatp=[0,0,250], up = [0,0,1], fov = 40, w = 2000, h = 1500, focusLength = 1000):
         """
 
         :param camp:
@@ -62,7 +62,7 @@ class World(ShowBase, object):
         self.render.setLight(ptlightnode2)
 
         # set up inputmanager
-        self.inputmgr = im.InputManager(self, lookatp)
+        self.inputmgr = im.InputManager(self, lookatp, focusLength)
         taskMgr.add(self.cycleUpdate, "cycle update")
 
         # set up rotational cam
@@ -84,26 +84,26 @@ class World(ShowBase, object):
         self.inputmgr.rotateCamPlane()
         return task.cont
 
-    def rotateCam(self, task):
-        campos = self.cam.getPos()
-        camangle = math.atan2(campos[1], campos[0])
-        # print camangle
-        if camangle < 0:
-            camangle += math.pi*2
-        if camangle >= math.pi*2:
-            camangle = 0
-        else:
-            camangle += math.pi/180
-        camradius = math.sqrt(campos[0]*campos[0]+campos[1]*campos[1])
-        camx = camradius*math.cos(camangle)
-        camy= camradius*math.sin(camangle)
-        self.cam.setPos(camx, camy, campos[2])
-        self.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])
-        return task.cont
+    # def rotateCam(self, task):
+    #     campos = self.cam.getPos()
+    #     camangle = math.atan2(campos[1], campos[0])
+    #     # print camangle
+    #     if camangle < 0:
+    #         camangle += math.pi*2
+    #     if camangle >= math.pi*2:
+    #         camangle = 0
+    #     else:
+    #         camangle += math.pi/180
+    #     camradius = math.sqrt(campos[0]*campos[0]+campos[1]*campos[1])
+    #     camx = camradius*math.cos(camangle)
+    #     camy= camradius*math.sin(camangle)
+    #     self.cam.setPos(camx, camy, campos[2])
+    #     self.cam.lookAt(self.lookatp[0], self.lookatp[1], self.lookatp[2])
+    #     return task.cont
 
-    def changeLookAt(self, lookatp):
-        self.cam.lookAt(lookatp[0], lookatp[1], lookatp[2])
-        self.inputmgr = im.InputManager(base, lookatp)
+    # def changeLookAt(self, lookatp):
+    #     self.cam.lookAt(lookatp[0], lookatp[1], lookatp[2])
+    #     self.inputmgr = im.InputManager(base, lookatp)
 
 # def setRenderEffect(base):
 #     """

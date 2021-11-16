@@ -6,16 +6,17 @@ import pandaplotutils.pandageom as pg
 
 class InputManager(DirectObject):
 
-    def __init__(self, pandabase, lookatp):
+    def __init__(self, pandabase, lookatp, focusLength = 1000.0):
         self.pandabase = pandabase
         self.lookatp = Vec3(lookatp[0], lookatp[1], lookatp[2])
         self.focusPoint = Vec3(lookatp[0], lookatp[1], lookatp[2])
-        self.moveScale = 50.0
+        self.moveScale = focusLength * 0.1
         self.initviewdist = self.pandabase.cam.getPos().length()
         self.lastm1pos = None
         self.lastm2pos = None
         self.lastm3pos = None
         self.rotatecenternp = None
+        self.focusLength = focusLength
         self.keyMap = {"mouse1": False, "mouse2": False, "mouse3": False, "wheel_up": False, "wheel_down": False, "space": False}
         self.accept("mouse1", self.__setKey, ["mouse1", True])
         self.accept("mouse1-up", self.__setKey, ["mouse1", False])
@@ -35,9 +36,9 @@ class InputManager(DirectObject):
 
     def rotateCamPlane(self):
 
-        camPosX = self.pandabase.cam.getX() + 1000 * self.pandabase.cam.getMat()(1, 0)
-        camPosY = self.pandabase.cam.getY() + 1000 * self.pandabase.cam.getMat()(1, 1)
-        camPosZ = self.pandabase.cam.getZ() + 1000 * self.pandabase.cam.getMat()(1, 2)
+        camPosX = self.pandabase.cam.getX() + self.focusLength * self.pandabase.cam.getMat()(1, 0)
+        camPosY = self.pandabase.cam.getY() + self.focusLength * self.pandabase.cam.getMat()(1, 1)
+        camPosZ = self.pandabase.cam.getZ() + self.focusLength * self.pandabase.cam.getMat()(1, 2)
         self.camPlaneCN.setPos(camPosX, camPosY, camPosZ)
         self.camPlaneCN.lookAt(self.pandabase.cam)
         #self.aimSphereCN.setPos(camPosX, camPosY, camPosZ)
@@ -73,7 +74,7 @@ class InputManager(DirectObject):
         # the collision node is attached to the render so that it will NOT move with the camera
         self.aimSphereCN = CollisionNode("aimSphereCN")
         # self.aimSphere = CollisionSphere(self.lookatp[0], self.lookatp[1], self.lookatp[2], camdist*.6)
-        self.aimSphere = CollisionSphere(0, 0, 0, 600.0)
+        self.aimSphere = CollisionSphere(0, 0, 0, self.focusLength * 0.7)
         self.aimSphereCN.addSolid(self.aimSphere)
         self.aimSphereCN.setFromCollideMask(BitMask32.allOff())
         self.aimSphereCN.setIntoCollideMask(BitMask32.bit(8))
