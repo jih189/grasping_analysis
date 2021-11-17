@@ -725,7 +725,7 @@ if __name__=='__main__':
     print(len(freegriptst.objtrimesh.faces))
     # freegriptst.objtrimesh.show()
 
-    base = pandactrl.World(camp=[0,700,0], lookatp=[0,0,0])
+    base = pandactrl.World(camp=[0,700,0], lookatp=[0,0,0], focusLength=700)
     freegriptst.removeBadSamples(mindist=2, maxdist=20)
     # freegriptst.clusterFacetSamplesKNN(reduceRatio=15, maxNPnts=5)
     freegriptst.clusterFacetSamplesRNN(reduceRadius=11)

@@ -1,7 +1,7 @@
-import math
+# import math
 import os
 
-import utils.robotmath as rm
+# import utils.robotmath as rm
 import pandaplotutils.pandactrl as pandactrl
 import pandaplotutils.pandageom as pandageom
 from direct.showbase.ShowBase import ShowBase
@@ -42,6 +42,7 @@ class Fetch_gripperNM():
         self.handnp = NodePath("fetchhnd")
 
         self.jawwidth = jawwidth
+        self.contactPointOffset = 20
 
         this_dir, _ = os.path.split(__file__)
         fetchpalmpath = Filename.fromOsSpecific(os.path.join(this_dir, "fetchegg", "gripper_link.egg"))
@@ -53,6 +54,7 @@ class Fetch_gripperNM():
         fetchlfinger = NodePath("l_gripper_finger_link")
         fetchrfingertip = NodePath("r_gripper_fingertip_link")
         fetchlfingertip = NodePath("l_gripper_fingertip_link")
+        fetchcontact = NodePath("contact_link")
 
         # loader is a global variable defined by panda3d
         fetchrfingerl = loader.loadModel(fetchrfingerpath)
@@ -63,23 +65,27 @@ class Fetch_gripperNM():
         fetchpalml.instanceTo(fetchpalm)
         fetchpalm.setPos(0,0,0)
 
+        # set the contact link
+        fetchcontact.setPos(self.contactPointOffset, 0, 0)
+        fetchcontact.reparentTo(fetchpalm)
+
         # set the left finger node path
         fetchlfingerl.instanceTo(fetchlfinger)
         fetchlfinger.setPos(0, -116.85, 0)
-        fetchlfingertip.setPos(20, -50, 0)   
+        fetchlfingertip.setPos(self.contactPointOffset, -50, 0)   
         fetchlfinger.reparentTo(fetchpalm)
         fetchlfingertip.reparentTo(fetchpalm)
 
         # set the right finger node path
         fetchrfingerl.instanceTo(fetchrfinger)
         fetchrfinger.setPos(0, 116.85, 0)
-        fetchrfingertip.setPos(20, 50, 0)
+        fetchrfingertip.setPos(self.contactPointOffset, 50, 0)
         fetchrfinger.reparentTo(fetchpalm)
         fetchrfingertip.reparentTo(fetchpalm)
 
         # draw the fingertips in frame
-        pandageom.plotSphere(fetchrfingertip, pos=Point3(0, 0, 0), radius=5, rgba=Vec4(1,0,0,1))
-        pandageom.plotSphere(fetchlfingertip, pos=Point3(0, 0, 0), radius=5, rgba=Vec4(1,0,0,1))
+        # pandageom.plotSphere(fetchrfingertip, pos=Point3(0, 0, 0), radius=5, rgba=Vec4(1,0,0,1))
+        # pandageom.plotSphere(fetchlfingertip, pos=Point3(0, 0, 0), radius=5, rgba=Vec4(1,0,0,1))
 
         # set color if need
         if hndcolor is None:
@@ -117,6 +123,10 @@ class Fetch_gripperNM():
     def jawwidthclosed(self):
         # read-only property
         return self.__jawwidthclosed
+
+    @property
+    def fingertipsOffset(self):
+        return self.contactPointOffset
 
     # get the two fingertips in the hand link, you can use this function to get the fingertips direction
     def getFingerTips(self):
