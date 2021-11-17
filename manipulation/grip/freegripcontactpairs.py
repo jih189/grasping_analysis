@@ -25,7 +25,7 @@ import pickle
 
 class FreegripContactpairs(object):
 
-    def __init__(self, ompath, readser=False):
+    def __init__(self, ompath, numberOfSamplingPoints, readser=False):
         self.objtrimesh = None
         # the sampled points and their normals
         self.objsamplepnts = None
@@ -52,12 +52,13 @@ class FreegripContactpairs(object):
         self.facetcolorarray = None
         self.counter = 0
         if readser is False:
-            self.loadObjModel(ompath)
-            self.saveSerialized("tmpnocp.pickle")
+            self.loadObjModel(ompath, numberOfSamplingPoints)
+            # self.saveSerialized("tmpnocp.pickle")
         else:
-            self.loadSerialized("tmpnocp.pickle", ompath)
+            # self.loadSerialized("tmpnocp.pickle", ompath)
+            pass
 
-    def loadObjModel(self, ompath):
+    def loadObjModel(self, ompath, numOfSamplingPoints):
         self.objtrimesh=trimesh.load_mesh(ompath)
         # oversegmentation
         self.facets, self.facetnormals = self.objtrimesh.facets_over(faceangle=.95, segangle = .95)
@@ -70,7 +71,7 @@ class FreegripContactpairs(object):
         #     facetnormal = facetnormal/np.linalg.norm(facetnormal)
         #     self.facetnormals.append(facetnormal)
         self.facetcolorarray = pandageom.randomColorArray(self.facets.shape[0])
-        self.sampleObjModel()
+        self.sampleObjModel(numpointsoververts=numOfSamplingPoints)
 
     def loadSerialized(self, filename, ompath):
         self.objtrimesh=trimesh.load_mesh(ompath)

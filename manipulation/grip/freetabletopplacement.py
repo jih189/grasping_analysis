@@ -24,7 +24,6 @@ from utils import robotmath as rm
 from database import dbaccess as db
 
 import matplotlib.pyplot as plt
-import geopandas as gpd
 
 from scipy.spatial import KDTree
 # fibonacci sphere points generator
@@ -41,9 +40,6 @@ def fibonacci_sphere(samples=100):
 
         x = math.cos(theta) * radius
         z = math.sin(theta) * radius
-
-        # if x < 0.0 or (x == 0.0 and y < 0.0) or (x == 0.0 and y == 0.0 and z < 0.0):
-        #     continue
 
         points.append((x, y, z))
 
@@ -103,13 +99,13 @@ class FreeTabletopPlacement(object):
         self.planebullnode1 = cd.genCollisionPlane(offset=3)
         self.bulletworldhp1.attachRigidBody(self.planebullnode1)
 
-        self.planebullnode2 = cd.genCollisionPlane(offset=30)
+        # according to your object, do not set this too high
+        self.planebullnode2 = cd.genCollisionPlane(offset=20)
         self.bulletworldhplowest.attachRigidBody(self.planebullnode2)
 
         self.handpkg = handpkg
         self.handname = handpkg.getHandName()
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.1])
-        # self.rtq85hnd = rtq85nm.Rtq85NM(hndcolor=[1, 0, 0, .1])
 
         # for dbsave
         # each tpsmat4 corresponds to a set of tpsgripcontacts/tpsgripnormals/tpsgripjawwidth list
@@ -131,6 +127,14 @@ class FreeTabletopPlacement(object):
         self.loadFreeAirGrip()
 
     def genFixturelessPlacement(self):
+        '''
+        This function generates a set of fixtureless placement with relative grasps
+        return:
+            self.tpsffplacements has a list of pose of fixtureless fixturing placements
+            self.tpsmat4s will be appended with self.tpsffplacements
+            self.tpshasgrasp has a list of grasps for each ff placement
+            self.tpsffgrips contains the index of each ff placement in self.tpshasgrasp
+        '''
 
         self.tpsffplacements = []
         self.tpsffgrips = []
@@ -140,20 +144,28 @@ class FreeTabletopPlacement(object):
         for t in fibonacci_sphere(642):
             angleMap.append(t)
 
+        # each i-th list of self.tpshasgrasp contains a set of grasps belong the plane whose normal is equal to i-th accuracyDirect.
         self.tpshasgrasp = [[] for _ in range(len(angleMap))] # possible finger directions
         accuracyDirect = np.zeros((len(angleMap), 3))
 
         # build the kd tree of the direction sets
         self.tpsdirections = KDTree(np.array(angleMap))
 
+        # cluster grasps according to the plane
         for f in range(len(self.freegripnormals)):
-            dis, ind = self.tpsdirections.query(mapParallelDirection(self.freegripnormals[f][0]))
+            _, ind = self.tpsdirections.query(mapParallelDirection(self.freegripnormals[f][0]))
             if len(self.tpshasgrasp[ind]) == 0:
-                accuracyDirect[ind][0] = mapParallelDirection(self.freegripnormals[f][0])[0]
-                accuracyDirect[ind][1] = mapParallelDirection(self.freegripnormals[f][0])[1]
-                accuracyDirect[ind][2] = mapParallelDirection(self.freegripnormals[f][0])[2]
-            self.tpshasgrasp[ind].append([self.freegriprotmats[f], self.freegripjawwidth[f], self.freegripid[f], self.freegripnormals[f][0], self.freegripnormals[f][1]])
+                newFreegripnormals = mapParallelDirection(self.freegripnormals[f][0])
+                accuracyDirect[ind][0] = newFreegripnormals[0]
+                accuracyDirect[ind][1] = newFreegripnormals[1]
+                accuracyDirect[ind][2] = newFreegripnormals[2]
+            self.tpshasgrasp[ind].append([self.freegriprotmats[f], 
+                                          self.freegripjawwidth[f], 
+                                          self.freegripid[f], 
+                                          self.freegripnormals[f][0], 
+                                          self.freegripnormals[f][1]])
 
+        # fingeridrections keeps the pair(normal direction of a set of grasp, direction id)
         fingerdirections = []
         for n in range(len(self.tpshasgrasp)):
             if len(self.tpshasgrasp[n]) > 0:
@@ -163,7 +175,7 @@ class FreeTabletopPlacement(object):
         stabledirectionbit = np.zeros(len(angleMap))
         for p in range(len(self.stableplacementdirections)):
             sp = (self.stableplacementdirections[p][0], self.stableplacementdirections[p][1], self.stableplacementdirections[p][2])
-            dis, ind = self.tpsdirections.query(sp)
+            _, ind = self.tpsdirections.query(sp)
             stabledirectionbit[ind] += 1
 
         # according to all possible finger directions, calculate ff placement
@@ -171,7 +183,7 @@ class FreeTabletopPlacement(object):
             ffplacements, ffdirections = pg.generateFFPlacement(self.objtrimeshconv, d, self.objcom, 0.9)
 
             for i in range(len(ffplacements)): # remove the placement which is already stable
-                dis, ind = self.tpsdirections.query(ffdirections[i])
+                _, ind = self.tpsdirections.query(ffdirections[i])
                 if stabledirectionbit[ind] == 0:
                     self.tpsffplacements.append(pg.cvtMat4np4(ffplacements[i]))
                     self.tpsffgrips.append(dn)
@@ -199,22 +211,6 @@ class FreeTabletopPlacement(object):
         self.freegriprotmats = freeairgripdata[3]
         self.freegripjawwidth = freeairgripdata[4]
 
-    def loadFreeTabletopPlacement(self):
-        """
-        load free tabletopplacements
-
-        :return:
-        """
-        # tpsmat4s = self.gdb.loadFreeTabletopPlacement(self.dbobjname)
-        # if tpsmat4s is not None:
-        #     self.tpsmat4s = tpsmat4s
-        #     return True
-        # else:
-        #     self.tpsmat4s = []
-        #     return False
-        self.tpsmat4s = []
-        return False
-
     def removebadfacets(self, base, doverh=.1):
         """
         remove the facets that cannot support stable placements
@@ -223,9 +219,6 @@ class FreeTabletopPlacement(object):
                 when fh>dmg, the object tends to fall over. setting doverh to 0.033 means
                 when f>0.1mg, the object is judged to be unstable
         :return:
-
-        author: weiwei
-        date: 20161213
         """
         self.tpsmat4s = []
         self.stableplacementdirections = []
@@ -261,15 +254,21 @@ class FreeTabletopPlacement(object):
 
         self.numberOfStable = len(self.tpsmat4s)
 
+    def isProjectedPointOnLineSegment2d(self, p, v1, v2):
+        def dotProduct(a, b):
+            return a[0]*b[0] + a[1]*b[1]
+        e1 = [v2[0] - v1[0], v2[1] - v1[1]]
+        recArea = dotProduct(e1, e1)
+        e2 = [p[0] - v1[0], p[1] - v1[1]]
+        val = dotProduct(e1, e2)
+        return (val > 0 and val < recArea)
+
     def gentpsgrip(self, base):
         """
         Originally the code of this function is embedded in the removebadfacet function
         It is separated on 20170608 to enable common usage of placements for different hands
 
         :return:
-
-        author: weiwei
-        date: 20170608
         """
 
         self.tpsgripcontacts = []
@@ -289,83 +288,78 @@ class FreeTabletopPlacement(object):
                 ii = i - self.numberOfStable
                 for rotmat, jawwidth, gripid, cctn0, cctn1 in self.tpshasgrasp[self.tpsffgrips[ii]]:
                     tpsgriprotmat = rotmat * self.tpsmat4s[i]
-                    
+
+                    # need to check whether both fingertips are in the same level height.
+                    if abs(tpsgriprotmat(1,2)) > 0.01:
+                        continue
+
                     # check if the hand collide with tabletop
-                    # tmprtq85 = self.rtq85hnd
-                    tmphnd = self.hand
-                    # tmprtq85 = rtq85nm.Rtq85NM(hndcolor=[1, 0, 0, 1])
-                    initmat = tmphnd.getMat()
-                    initjawwidth = tmphnd.jawwidth
+                    initmat = self.hand.getMat()
+                    initjawwidth = self.hand.jawwidth
+
                     # open the hand to ensure it doesnt collide with surrounding obstacles
-                    # tmprtq85.setJawwidth(self.freegripjawwidth[j])
-                    tmphnd.setJawwidth(jawwidth) #self.freegripjawwidth[j])
-                    tmphnd.setMat(pandanpmat4 = tpsgriprotmat)
+                    self.hand.setJawwidth(jawwidth)
+                    self.hand.setMat(pandanpmat4 = tpsgriprotmat)
+                    
+                    # check whether the mass center is between two fingertips
+                    cct0, cct1 = self.hand.getFingerTips()
+                    cct0 = self.getPointFromPose(tpsgriprotmat, cct0)
+                    cct1 = self.getPointFromPose(tpsgriprotmat, cct1)
+                    projectedMass = self.getPointFromPose(tpsgriprotmat, self.objcom)
+                    if not self.isProjectedPointOnLineSegment2d([projectedMass[0], projectedMass[1]], [cct0[0], cct0[1]], [cct1[0], cct1[1]]):
+                        self.hand.setMat(pandanpmat4 = initmat)
+                        self.hand.setJawwidth(initjawwidth)
+                        continue
+
                     # add hand model to bulletworld
-                    hndbullnode = cd.genCollisionMeshMultiNp(tmphnd.handnp)
-                    hndbull_without_fingers_node = cd.genCollisionMeshMultiNp(tmphnd.palmnp)
+                    hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
+                    hndbull_without_fingers_node = cd.genCollisionMeshMultiNp(self.hand.handnp)
                     result0 = self.bulletworldhp.contactTest(hndbullnode)
                     result1 = self.bulletworldhp1.contactTest(hndbullnode)
                     result2 = self.bulletworldhplowest.contactTest(hndbull_without_fingers_node)
-                    # print(result.getNumContacts())
+
                     if not result0.getNumContacts() and not result1.getNumContacts() and not result2.getNumContacts():
                         self.tpsgriprotmats[-1].append(tpsgriprotmat)
-                        # cct0 = self.tpsmat4s[i].xformPoint(self.freegripcontacts[j][0])
-                        # cct1 = self.tpsmat4s[i].xformPoint(self.freegripcontacts[j][1])
-                        # cct0 = self.freegripcontacts[j][0]
-                        # cct1 = self.freegripcontacts[j][1]
-                        cct0, cct1 = tmphnd.getFingerTips()
-                        cct0 = self.getPointFromPose(tpsgriprotmat, cct0)
-                        cct1 = self.getPointFromPose(tpsgriprotmat, cct1)
+
                         self.tpsgripcontacts[-1].append([cct0, cct1])
-                        # cctn0 = self.tpsmat4s[i].xformVec(self.freegripnormals[j][0])
-                        # cctn1 = self.tpsmat4s[i].xformVec(self.freegripnormals[j][1])
-                        # cctn0 = self.freegripnormals[j][0]
-                        # cctn1 = self.freegripnormals[j][1]
+
                         self.tpsgripnormals[-1].append([cctn0, cctn1])
-                        self.tpsgripjawwidth[-1].append(jawwidth)#self.freegripjawwidth[j])
-                        self.tpsgripidfreeair[-1].append(gripid)#self.freegripid[j])
-                    tmphnd.setMat(pandanpmat4 = initmat)
-                    tmphnd.setJawwidth(initjawwidth)
+                        self.tpsgripjawwidth[-1].append(jawwidth)
+                        self.tpsgripidfreeair[-1].append(gripid)
+                    self.hand.setMat(pandanpmat4 = initmat)
+                    self.hand.setJawwidth(initjawwidth)
             else:
                 for j, rotmat in enumerate(self.freegriprotmats):
 
                     tpsgriprotmat = rotmat * self.tpsmat4s[i]
                     
                     # check if the hand collide with tabletop
-                    # tmprtq85 = self.rtq85hnd
-                    tmphnd = self.hand
-                    # tmprtq85 = rtq85nm.Rtq85NM(hndcolor=[1, 0, 0, 1])
-                    initmat = tmphnd.getMat()
-                    initjawwidth = tmphnd.jawwidth
+                    initmat = self.hand.getMat()
+                    initjawwidth = self.hand.jawwidth
                     # open the hand to ensure it doesnt collide with surrounding obstacles
-                    # tmprtq85.setJawwidth(self.freegripjawwidth[j])
-                    tmphnd.setJawwidth(self.freegripjawwidth[j])
-                    tmphnd.setMat(pandanpmat4 = tpsgriprotmat)
+                    self.hand.setJawwidth(self.freegripjawwidth[j])
+                    self.hand.setMat(pandanpmat4 = tpsgriprotmat)
                     # add hand model to bulletworld
-                    hndbullnode = cd.genCollisionMeshMultiNp(tmphnd.handnp)
-                    hndbull_without_fingers_node = cd.genCollisionMeshMultiNp(tmphnd.palmnp)
+                    hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
+                    hndbull_without_fingers_node = cd.genCollisionMeshMultiNp(self.hand.handnp)
                     result0 = self.bulletworldhp.contactTest(hndbullnode)
                     result1 = self.bulletworldhp1.contactTest(hndbullnode)
                     result2 = self.bulletworldhplowest.contactTest(hndbull_without_fingers_node)
                     if not result0.getNumContacts() and not result1.getNumContacts() and not result2.getNumContacts():
                         self.tpsgriprotmats[-1].append(tpsgriprotmat)
-                        # cct0 = self.tpsmat4s[i].xformPoint(self.freegripcontacts[j][0])
-                        # cct1 = self.tpsmat4s[i].xformPoint(self.freegripcontacts[j][1])
-                        # cct0 = self.freegripcontacts[j][0]
-                        # cct1 = self.freegripcontacts[j][1]
-                        cct0, cct1 = tmphnd.getFingerTips()
+
+                        cct0, cct1 = self.hand.getFingerTips()
                         cct0 = self.getPointFromPose(tpsgriprotmat, cct0)
                         cct1 = self.getPointFromPose(tpsgriprotmat, cct1)
                         self.tpsgripcontacts[-1].append([cct0, cct1])
-                        # cctn0 = self.tpsmat4s[i].xformVec(self.freegripnormals[j][0])
-                        # cctn1 = self.tpsmat4s[i].xformVec(self.freegripnormals[j][1])
+
                         cctn0 = self.freegripnormals[j][0]
                         cctn1 = self.freegripnormals[j][1]
                         self.tpsgripnormals[-1].append([cctn0, cctn1])
                         self.tpsgripjawwidth[-1].append(self.freegripjawwidth[j])
                         self.tpsgripidfreeair[-1].append(self.freegripid[j])
-                    tmphnd.setMat(pandanpmat4 = initmat)
-                    tmphnd.setJawwidth(initjawwidth)
+                    self.hand.setMat(pandanpmat4 = initmat)
+                    self.hand.setJawwidth(initjawwidth)
 
     def getPointFromPose(self, pose, point):
         return Point3(pose[0][0] * point[0] + pose[1][0] * point[1] + pose[2][0] * point[2] + pose[3][0], \
@@ -440,90 +434,6 @@ class FreeTabletopPlacement(object):
                         self.gdb.execute(sql)
         else:
             print("Freetabletopgrip already exist!")
-
-    def removebadfacetsshow(self, base, doverh=.1):
-        """
-        remove the facets that cannot support stable placements
-
-        :param: doverh: d is the distance of mproj to supportfacet boundary, h is the height of com
-                when fh>dmg, the object tends to fall over. setting doverh to 0.033 means
-                when f>0.1mg, the object is judged to be unstable
-        :return:
-
-        author: weiwei
-        date: 20161213
-        """
-
-        plotoffsetfp = 10
-        # print(self.counter)
-
-        if self.counter < len(self.ocfacets):
-            i = self.counter
-        # for i in range(len(self.ocfacets)):
-            geom = pg.packpandageom(self.objtrimeshconv.vertices,
-                                           self.objtrimeshconv.face_normals[self.ocfacets[i]],
-                                           self.objtrimeshconv.faces[self.ocfacets[i]])
-            geombullnode = cd.genCollisionMeshGeom(geom)
-            self.bulletworldray.attachRigidBody(geombullnode)
-            pFrom = Point3(self.objcom[0], self.objcom[1], self.objcom[2])
-            pTo = self.objcom+self.ocfacetnormals[i]*99999
-            pTo = Point3(pTo[0], pTo[1], pTo[2])
-            result = self.bulletworldray.rayTestClosest(pFrom, pTo)
-            self.bulletworldray.removeRigidBody(geombullnode)
-            if result.hasHit():
-                hitpos = result.getHitPos()
-                pg.plotArrow(base.render, spos=self.objcom,
-                             epos = self.objcom+self.ocfacetnormals[i], length=100)
-
-                facetinterpnt = np.array([hitpos[0],hitpos[1],hitpos[2]])
-                facetnormal = np.array(self.ocfacetnormals[i])
-                bdverts3d, bdverts2d, facetmat4 = pg.facetboundary(self.objtrimeshconv, self.ocfacets[i],
-                                                                   facetinterpnt, facetnormal)
-                for j in range(len(bdverts3d)-1):
-                    spos = bdverts3d[j]
-                    epos = bdverts3d[j+1]
-                    pg.plotStick(base.render, spos, epos, thickness = 1, rgba=[.5,.5,.5,1])
-
-                facetp = Polygon(bdverts2d)
-                facetinterpnt2d = rm.transformmat4(facetmat4, facetinterpnt)[:2]
-                apntpnt = Point(facetinterpnt2d[0], facetinterpnt2d[1])
-                dist2p = apntpnt.distance(facetp.exterior)
-                dist2c = np.linalg.norm(np.array([hitpos[0],hitpos[1],hitpos[2]])-np.array([pFrom[0],pFrom[1],pFrom[2]]))
-                if dist2p/dist2c < doverh:
-                    print("not stable")
-                    # return
-                else:
-                    print(dist2p/dist2c)
-                    pol_ext = LinearRing(bdverts2d)
-                    d = pol_ext.project(apntpnt)
-                    p = pol_ext.interpolate(d)
-                    closest_point_coords = list(p.coords)[0]
-                    closep = np.array([closest_point_coords[0], closest_point_coords[1], 0])
-                    closep3d = rm.transformmat4(rm.homoinverse(facetmat4), closep)[:3]
-                    pg.plotDumbbell(base.render, spos=facetinterpnt, epos=closep3d, thickness=1.5, rgba=[0,0,1,1])
-
-                    for j in range(len(bdverts3d)-1):
-                        spos = bdverts3d[j]
-                        epos = bdverts3d[j+1]
-                        pg.plotStick(base.render, spos, epos, thickness = 1.5, rgba=[0,1,0,1])
-
-                    # geomoff = pg.packpandageom(self.objtrimeshconv.vertices +
-                    #                                np.tile(plotoffsetfp * self.ocfacetnormals[i],
-                    #                                        [self.objtrimeshconv.vertices.shape[0], 1]),
-                    #                         self.objtrimeshconv.face_normals[self.ocfacets[i]],
-                    #                         self.objtrimeshconv.faces[self.ocfacets[i]])
-                    #
-                    # nodeoff = GeomNode('supportfacet')
-                    # nodeoff.addGeom(geomoff)
-                    # staroff = NodePath('supportfacet')
-                    # staroff.attachNewNode(nodeoff)
-                    # staroff.setColor(Vec4(1,0,1,1))
-                    # staroff.setTransparency(TransparencyAttrib.MAlpha)
-                    # staroff.setTwoSided(True)
-                    # staroff.reparentTo(base.render)
-            self.counter+=1
-        else:
-            self.counter=0
 
     def grpshow(self, base):
 
@@ -712,131 +622,39 @@ class FreeTabletopPlacement(object):
                 # tmphnd.setJawwidth(0)
                 # tmprtq85.setJawwidth(80)
                 
-                cct0 = self.tpsgripcontacts[i][j][0]
-                cct1 = self.tpsgripcontacts[i][j][1]
+                # cct0 = self.tpsgripcontacts[i][j][0]
+                # cct1 = self.tpsgripcontacts[i][j][1]
 
-                pandageom.plotSphere(base.render, pos=Point3(cct0[0] + tx * distanceBetweenObjects, cct0[1] + ty * distanceBetweenObjects, cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
-                pandageom.plotSphere(base.render, pos=Point3(cct1[0] + tx * distanceBetweenObjects, cct1[1] + ty * distanceBetweenObjects, cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
+                #pandageom.plotSphere(base.render, pos=Point3(cct0[0] + tx * distanceBetweenObjects, cct0[1] + ty * distanceBetweenObjects, cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
+                #pandageom.plotSphere(base.render, pos=Point3(cct1[0] + tx * distanceBetweenObjects, cct1[1] + ty * distanceBetweenObjects, cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
                 # pandageom.plotSphere(base.render, pos=Point3(cct0[0], cct0[1] , cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
                 # pandageom.plotSphere(base.render, pos=Point3(cct1[0], cct1[1] , cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
                 tmphnd.reparentTo(base.render)
 
 
-    def ocfacetshow(self, base):
-        print(self.objcom)
-
-        npf = base.render.find("**/supportfacet")
-        if npf:
-            npf.removeNode()
-
-        plotoffsetfp = 10
-
-        print(self.counter)
-        print(len(self.ocfacets))
-        if self.counter < len(self.ocfacets):
-            geom = pandageom.packpandageom(self.objtrimeshconv.vertices+
-                                           np.tile(plotoffsetfp*self.ocfacetnormals[self.counter],
-                                                   [self.objtrimeshconv.vertices.shape[0],1]),
-                                           self.objtrimeshconv.face_normals[self.ocfacets[self.counter]],
-                                           self.objtrimeshconv.faces[self.ocfacets[self.counter]])
-            # geom = pandageom.packpandageom(self.objtrimeshconv.vertices,
-            #                                self.objtrimeshconv.face_normals,
-            #                                self.objtrimeshconv.faces)
-            node = GeomNode('supportfacet')
-            node.addGeom(geom)
-            star = NodePath('supportfacet')
-            star.attachNewNode(node)
-            star.setColor(Vec4(1,0,1,1))
-            star.setTransparency(TransparencyAttrib.MAlpha)
-            star.setTwoSided(True)
-            star.reparentTo(base.render)
-            self.counter+=1
-        else:
-            self.counter = 0
-
 if __name__ == '__main__':
 
     base = pandactrl.World(camp=[700,300,1400], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
-    # objpath = os.path.join(this_dir, "objects", "sandpart.stl")
-    # objpath = os.path.join(this_dir, "objects", "ttube.stl")
-    # objpath = os.path.join(this_dir, "objects", "tool.stl")
-    # objpath = os.path.join(this_dir, "objects", "tool2.stl")
-    # objpath = os.path.join(this_dir, "objects", "planewheel.stl")
-    # objpath = os.path.join(this_dir, "objects", "planelowerbody.stl")
-    # objpath = os.path.join(this_dir, "objects", "planefrontstay.stl")
-    # objpath = os.path.join(this_dir, "objects", "planerearstay.stl")
-    # objpath = os.path.join(this_dir, "objects", "planerearstay2.stl")
+
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "cup.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
     # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
 
-    # from manipulation.grip.hrp5three import hrp5threenm
-    # handpkg = hrp5threenm
-    # handpkg = rtq85nm
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
     tps = FreeTabletopPlacement(objpath, handpkg, gdb)
-
-    # objpath0 = os.path.join(this_dir, "objects", "ttube.stl")
-    # objpath1 = os.path.join(this_dir, "objects", "tool.stl")
-    # objpath2 = os.path.join(this_dir, "objects", "planewheel.stl")
-    # objpath3 = os.path.join(this_dir, "objects", "planelowerbody.stl")
-    # objpath4 = os.path.join(this_dir, "objects", "planefrontstay.stl")
-    # objpath5 = os.path.join(this_dir, "objects", "planerearstay.stl")
-    # objpaths = [objpath0, objpath1, objpath2, objpath3, objpath4, objpath5]
-    # import time
-    # fo = open("foo.txt", "w")
-    # for objpath in objpaths:
-    #     tic = time.clock()
-    #     tps = FreeTabletopPlacement(objpath, gdb)
-    #     tps.removebadfacets(base, doverh=.2)
-    #     toc = time.clock()
-    #     print(toc-tic)
-    #     fo.write(os.path.basename(objpath)+' '+str(toc-tic)+'\n')
-    # fo.close()
-
-    # # plot obj and its convexhull
-    # geom = pandageom.packpandageom(tps.objtrimesh.vertices,
-    #                                tps.objtrimesh.face_normals,
-    #                                tps.objtrimesh.faces)
-    # node = GeomNode('obj')
-    # node.addGeom(geom)
-    # star = NodePath('obj')
-    # star.attachNewNode(node)
-    # star.setColor(Vec4(1,1,0,1))
-    # star.setTransparency(TransparencyAttrib.MAlpha)
-    # star.reparentTo(base.render)
-    # geom = pandageom.packpandageom(tps.objtrimeshconv.vertices,
-    #                                tps.objtrimeshconv.face_normals,
-    #                                tps.objtrimeshconv.faces)
-    # node = GeomNode('objconv')
-    # node.addGeom(geom)
-    # star = NodePath('objconv')
-    # star.attachNewNode(node)
-    # star.setColor(Vec4(0, 1, 0, .3))
-    # star.setTransparency(TransparencyAttrib.MAlpha)
-    # star.reparentTo(base.render)
-    # pg.plotSphere(base.render, pos=tps.objcom, radius=10, rgba=[1,0,0,1])
-    # def updateshow(task):
-    #     # tps.ocfacetshow(base)
-    #     tps.removebadfacetsshow(base, doverh=.1)
-    #     return task.again
-    # taskMgr.doMethodLater(.1, updateshow, "tickTask")
 
     def updateworld(world, task):
         world.doPhysics(globalClock.getDt())
         return task.cont
     
-    if tps.loadFreeTabletopPlacement():
-        pass
-    else:
-        tps.removebadfacets(base, doverh=.15)
+    tps.removebadfacets(base, doverh=.15)
 
     tps.genFixturelessPlacement()
     tps.gentpsgrip(base)
@@ -858,7 +676,5 @@ if __name__ == '__main__':
     # tps.showOnePlacementAndAssociatedGrips(base)
     tps.showAllPlacementAndAssociatedGrips(base)
     # tps.showAllFFPlacement(base)
-
-    # print("check ", tps.planebullnode.findAllMatches("**/+GeomNode"))
 
     base.run()

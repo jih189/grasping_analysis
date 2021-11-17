@@ -28,15 +28,16 @@ class Freegrip(fgcp.FreegripContactpairs):
         :param torqueresist: the maximum allowable distance to com (see FreegripContactpairs.planContactpairs)
         """
 
-        super(self.__class__, self).__init__(objpath, readser)
+        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=200, readser=readser)
         if readser is False:
             # use this one to set the max and min distance from fingertips to the boundary
-            self.removeBadSamples(mindist=10, maxdist=25)
-            self.clusterFacetSamplesRNN(reduceRadius=5)
+            self.removeBadSamples(mindist=5, maxdist=25)
+            self.clusterFacetSamplesRNN(reduceRadius=8)
             self.planContactpairs(torqueresist)
-            self.saveSerialized("tmpcp.pickle")
+            # self.saveSerialized("tmpcp.pickle")
         else:
-            self.loadSerialized("tmpcp.pickle", objpath)
+            pass
+            # self.loadSerialized("tmpcp.pickle", objpath)
 
         self.handpkg = handpkg
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.1])
@@ -280,9 +281,9 @@ if __name__=='__main__':
     base = pandactrl.World(camp=[700,300,700], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
-    # objpath = os.path.join(this_dir, "objects", "cup.stl")
+    objpath = os.path.join(this_dir, "objects", "cup.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")

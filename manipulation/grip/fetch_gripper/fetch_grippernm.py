@@ -157,9 +157,15 @@ class Fetch_gripperNM():
         r_gripper_finger = self.handnp.find("**/r_gripper_finger_link")
         r_gripper_finger.setPos(self.r_gripper_fingerPos_init[0], self.r_gripper_fingerPos_init[1] + jawwidth / 2, self.r_gripper_fingerPos_init[2])
 
+        r_gripper_fingertip = self.handnp.find("**/r_gripper_fingertip_link")
+        r_gripper_fingertip.setPos(self.r_gripper_fingertipPos_init[0], self.r_gripper_fingertipPos_init[1] + jawwidth / 2, self.r_gripper_fingertipPos_init[2])
+
         # left finger
         l_gripper_finger = self.handnp.find("**/l_gripper_finger_link")
         l_gripper_finger.setPos(self.l_gripper_fingerPos_init[0], self.l_gripper_fingerPos_init[1] - jawwidth / 2, self.l_gripper_fingerPos_init[2])
+
+        l_gripper_fingertip = self.handnp.find("**/l_gripper_fingertip_link")
+        l_gripper_fingertip.setPos(self.l_gripper_fingertipPos_init[0], self.l_gripper_fingertipPos_init[1] - jawwidth / 2, self.l_gripper_fingertipPos_init[2])
 
     def setColor(self, rgbacolor=[1,0,0,.1]):
         """
