@@ -638,8 +638,8 @@ if __name__ == '__main__':
     this_dir, this_filename = os.path.split(__file__)
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "cup.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")

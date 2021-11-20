@@ -281,9 +281,9 @@ if __name__=='__main__':
     base = pandactrl.World(camp=[700,300,700], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
-    objpath = os.path.join(this_dir, "objects", "cup.stl")
+    # objpath = os.path.join(this_dir, "objects", "cup.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
