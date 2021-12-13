@@ -72,14 +72,14 @@ class Fetch_gripperNM():
         # set the left finger node path
         fetchlfingerl.instanceTo(fetchlfinger)
         fetchlfinger.setPos(0, -116.85, 0)
-        fetchlfingertip.setPos(self.contactPointOffset, -50, 0)   
+        fetchlfingertip.setPos(self.contactPointOffset, 0, 0)   
         fetchlfinger.reparentTo(fetchpalm)
         fetchlfingertip.reparentTo(fetchpalm)
 
         # set the right finger node path
         fetchrfingerl.instanceTo(fetchrfinger)
         fetchrfinger.setPos(0, 116.85, 0)
-        fetchrfingertip.setPos(self.contactPointOffset, 50, 0)
+        fetchrfingertip.setPos(self.contactPointOffset, 0, 0)
         fetchrfinger.reparentTo(fetchpalm)
         fetchrfingertip.reparentTo(fetchpalm)
 
@@ -348,7 +348,8 @@ if __name__=='__main__':
     fetchhnd = Fetch_gripperNM(hndcolor=[.5,.5,0.5,.7])
     # test
     fetchhnd.reparentTo(base.render)
-    fetchhnd.setJawwidth(0)
+    fetchhnd.setJawwidth(15)
+    print(fetchhnd.getFingerTips())
 
     axis = loader.loadModel('zup-axis.egg')
     axis.setScale(10)

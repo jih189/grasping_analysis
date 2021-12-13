@@ -918,6 +918,11 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     compute the contour according to a direction
     todo: need to check with object with other shape
 
+    return:
+        possible fixtureless fixturing placements
+        relative fixutreless fixturing placements direction in the object frame
+        pivot points in the object frame
+
     author: frank
     """
     def inSameLine(p1, p2, p3):
@@ -1000,20 +1005,42 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
 
     ffdirections = []
     heights = []
+
+    pivotpoints = []
+
+    isFirstPlacementStable = True
     
     # calculate the ff direction
     for p in range(len(verts2d) - 1):
+        
         line_2d = LineString([verts2d[p], verts2d[p+1]])
         
+        # nearest_points will return the nearest point on line_2d to mass center 
         interaction = nearest_points(line_2d, mass_center_2d)[0]
+        ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
         # if the mass center does not project onto the line, the ignore it
         # todo: it is too close to the boundary, it should be ignore as well
-        if interaction == verts2d[p] or interaction == verts2d[p+1]:
+        
+        if (interaction == verts2d[p] or interaction == verts2d[p+1]) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
+            if p == 0:
+                isFirstPlacementStable = False
+                pivotpoints.append([])
+
+            # not a relative stable placement
+            # pivotpoints[-1].append(verts2d[p+1])
+            pivotpoints[-1].append(rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3])
+            if p == len(verts2d) - 2 and not isFirstPlacementStable:
+                pivotpoints[-1] += pivotpoints[0]
+                pivotpoints.pop(0)
             continue
 
-        ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
-        if line_2d.length / np.linalg.norm(ffdirection) < doverh:
-            continue
+        # pivotpoints.append([verts2d[p+1]])
+        pivotpoints.append([rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3]])
+
+        if p == len(verts2d) - 2 and not isFirstPlacementStable:
+            pivotpoints[-1] += pivotpoints[0]
+            pivotpoints.pop(0)
+
         heights.append(np.linalg.norm(ffdirection))
          
         ffdirection = ffdirection / np.linalg.norm(ffdirection)
@@ -1022,6 +1049,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         
         ffdirections.append(ffdirection)
 
+
     ffplacements = []
     for f in range(len(ffdirections)):
         ffdirections[f][abs(ffdirections[f]) < 1e-12] = 0.0 # handle the case align_vectors has two invert directions
@@ -1029,7 +1057,8 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         rotplacement[2,3] = heights[f]
         ffplacements.append(rotplacement)
 
-    return ffplacements, ffdirections
+    return ffplacements, ffdirections, pivotpoints
+
 
 
 def facetboundary(objtrimesh, facet, facetcenter, facetnormal):

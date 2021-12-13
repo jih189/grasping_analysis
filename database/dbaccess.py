@@ -57,6 +57,24 @@ class GraspDB(object):
 
         self.dbconnection.commit()
 
+    def loadFreeAirGripByIds(self, id):
+        """
+        load grip with ids
+
+        author: frank
+
+        """
+        # access to db
+
+        sql = "SELECT freeairgrip.rotmat, freeairgrip.jawwidth FROM freeairgrip \
+                WHERE freeairgrip.idfreeairgrip = %d" % id
+        data = self.execute(sql)
+        if len(data) != 0:
+            return dc.strToMat4(data[0][0]), float(data[0][1])
+        else:
+            return None, None
+
+
     def loadFreeAirGrip(self, objname, handname = "rtq85"):
         """
         load self.freegripid, etc. from mysqldatabase
