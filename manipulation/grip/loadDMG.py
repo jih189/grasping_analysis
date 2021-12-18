@@ -14,22 +14,18 @@ import numpy as np
 from direct.task import Task
 
 if __name__ == '__main__':
-    base = pandactrl.World(camp=[1000,0,0], lookatp=[0,0,0])
+    base = pandactrl.World(camp=[1000,700,0], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
-    objpath = os.path.join(this_dir, "objects", "cup.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
     regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
 
     regrasp_planner.loadDB()
 
-    rotationMatrix180 = np.identity(4)
-    rotationMatrix180[0][0] = -1
-    rotationMatrix180[2][2] = -1
-
     placementId = 2
-    startGraspId = 4
-    goalGraspId = 18
+    startGraspId = 12
+    goalGraspId = 10
 
     startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
     goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
@@ -38,7 +34,8 @@ if __name__ == '__main__':
     
     # pass the init grasp and target grasp in object frame
     # pass the object placement in the table frame
-    grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)).dot(rotationMatrix180), inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)).dot(rotationMatrix180), 0.08, PandaPosMax_t_PosMat(placementPose), base)
+    grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), 
+                inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 0.08, PandaPosMax_t_PosMat(placementPose), base)
 
     if grasp_trajectory == None:
         print("no path between init grasp to target grasp")
@@ -47,7 +44,7 @@ if __name__ == '__main__':
     poseTrajectory = []
     print("len of grasp = ", len(grasp_trajectory))
     for g in range(len(grasp_trajectory) - 1):
-        trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]).dot(rotationMatrix180), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]).dot(rotationMatrix180))
+        trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]))
         poseTrajectory.extend(trajectory)
 
 

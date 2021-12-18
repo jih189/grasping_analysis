@@ -57,6 +57,18 @@ class GraspDB(object):
 
         self.dbconnection.commit()
 
+    def loadFreeTabletopPlacementByIds(self, id):
+        # access to db
+
+        sql = "SELECT freetabletopplacement.rotmat FROM freetabletopplacement WHERE \
+                freetabletopplacement.idfreetabletopplacement = %d" % id
+        data = self.execute(sql)
+        if len(data) != 0:
+            return dc.strToMat4(data[0][0])
+        else:
+            print("Plan tabletoplacements using freetabletopplacement.removebadfacets first!")
+            return None
+
     def loadFreeAirGripByIds(self, id):
         """
         load grip with ids

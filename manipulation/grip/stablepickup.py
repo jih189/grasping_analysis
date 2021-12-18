@@ -21,6 +21,8 @@ from utils import dbcvt as dc
 from utils import robotmath as rm
 from database import dbaccess as db
 
+from ffregrasp import ff_regrasp_planner
+
 import random
 
 import networkx as nx
@@ -81,7 +83,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.validangle = 0.1
+        self.validangle = 0.07
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -128,8 +130,12 @@ class StablePickupPlanner(object):
         self.tpsmat4s, self.placementid, self.placementtype = freetabletopplacementdata
 
     def randomlyPickOneGrasp(self):
-        random_index = random.randint(0, len(self.freegripid))
-        # random_index = 19
+        """
+        generate a random initial grasp and placement in numpy format
+         
+        """
+        # random_index = random.randint(0, len(self.freegripid))
+        random_index = 173
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -140,16 +146,18 @@ class StablePickupPlanner(object):
         if len(result) == 0:
             print("there is no way to place the object with current grasp")
             return None, None
-        random_placement_index = random.randint(0, len(result) - 1)
-        return [self.freegriprotmats[random_index], self.freegripjawwidth[random_index]], dc.strToMat4(result[random_placement_index][0])
+        # random_placement_index = random.randint(0, len(result) - 1)
+        # print("check random ", random_placement_index)
+        random_placement_index = 1
+
+        return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
 
     def getPointFromPose(self, pose, point):
         return Point3(pose[0][0] * point[0] + pose[1][0] * point[1] + pose[2][0] * point[2] + pose[3][0], \
                       pose[0][1] * point[0] + pose[1][1] * point[1] + pose[2][1] * point[2] + pose[3][1], \
                       pose[0][2] * point[0] + pose[1][2] * point[1] + pose[2][2] * point[2] + pose[3][2])
 
-
-    def checkWayToPlace(self, liftupPose, grasppose, jawwidth):
+    def checkWayToPlace(self, liftupPose_t, grasppose_t, jawwidth):
         '''
         According to the paper "Reorienting Objects in 3D Space Using Pivoting", 
         non-slipping placing down requires that both ground-object contact point and masscenter
@@ -162,6 +170,9 @@ class StablePickupPlanner(object):
         There are two cases. First, all ground contact point, mass center, and hand contact point are on the 
         same line. The second case is that they are not on the same line.
         '''
+        liftupPose = pg.cvtMat4np4(liftupPose_t)
+        grasppose = pg.cvtMat4np4(grasppose_t)
+
         def angle_between(p1, p2):
             ang1 = np.arctan2(*p1[::-1])
             ang2 = np.arctan2(*p2[::-1])
@@ -178,7 +189,7 @@ class StablePickupPlanner(object):
 
         # find the closest ground contact point
         # move the object down a little to cause collision
-        liftuppose.setCell(3,2,liftuppose.getCell(3,2) - 1)
+        liftupPose.setCell(3,2,liftupPose.getCell(3,2) - 1)
         self.npnodeobj.setMat(liftupPose)
 
         objbullnode = cd.genCollisionMeshMultiNp(self.npnodeobj)
@@ -193,7 +204,7 @@ class StablePickupPlanner(object):
             ground_touching_point_2d.append(self.getPointFromPose(z_axis_rotation, contactpointOnObject)[0])
             ground_touching_point_3d.append(contactpointOnObject)
 
-        liftuppose.setCell(3,2,liftuppose.getCell(3,2) + 1)
+        liftupPose.setCell(3,2,liftupPose.getCell(3,2) + 1)
         self.npnodeobj.setMat(liftupPose)
 
         # the closest x value of ground contact point
@@ -209,7 +220,7 @@ class StablePickupPlanner(object):
         for i in range(len(self.objtrimeshconv.faces)):
             for j in range(3):
                 vert = self.objtrimeshconv.vertices[self.objtrimeshconv.faces[i][j]]
-                vertp = self.getPointFromPose(liftuppose * z_axis_rotation, vert)
+                vertp = self.getPointFromPose(liftupPose * z_axis_rotation, vert)
 
                 # if the other side of touch point is so close to the rotate point, then ignore it
                 if np.linalg.norm([abs(rotationPoint_2d - vertp[0]), vertp[2]]) < 1.0:
@@ -225,7 +236,7 @@ class StablePickupPlanner(object):
                     if temp < clockwise_rotation_angle_2d and temp >= 0.0:
                         clockwise_rotation_angle_2d = temp
 
-        placedownpose = LMatrix4f(liftuppose)
+        placedownpose = LMatrix4f(liftupPose)
         placedownpose.setCell(3,0,placedownpose.getCell(3,0) - rotationPoint[0])
         placedownpose.setCell(3,1,placedownpose.getCell(3,1) - rotationPoint[1])
         placedownpose.setCell(3,2,placedownpose.getCell(3,2) - rotationPoint[2])
@@ -242,20 +253,21 @@ class StablePickupPlanner(object):
         placedownpose.setCell(3,1,placedownpose.getCell(3,1) + rotationPoint[1])
         placedownpose.setCell(3,2,placedownpose.getCell(3,2) + rotationPoint[2])
 
-        return placedownpose
+        return pg.mat4ToNp(placedownpose)
 
     def getPrePickupPose(self, grasppose, jawwidth):
         '''
-        Given an initial grasp, this function return the pre-lift up pose the object should be.
+        Given an initial grasp in numpy format, this function return the pre-lift up pose the object should be.
+
         '''
 
         # open the hand to ensure it doesnt collide with surrounding obstacles
         self.hand.setJawwidth(jawwidth)
-        self.hand.setMat(pandanpmat4 = grasppose)
+        self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(grasppose))
 
         cct0, cct1 = self.hand.getFingerTips()
-        cct0 = self.getPointFromPose(grasppose, cct0)
-        cct1 = self.getPointFromPose(grasppose, cct1)
+        cct0 = self.getPointFromPose(pg.cvtMat4np4(grasppose), cct0)
+        cct1 = self.getPointFromPose(pg.cvtMat4np4(grasppose), cct1)
 
         toGroundDirection = np.array([self.objcom[0] - (cct0[0] + cct1[0])/2, 
                                       self.objcom[1] - (cct0[1] + cct1[1])/2, 
@@ -271,31 +283,35 @@ class StablePickupPlanner(object):
 
         liftupPose[2,3] = -MinPt[2]
 
-        return pg.cvtMat4np4(liftupPose)
+        return liftupPose
+        # return pg.cvtMat4np4(liftupPose)
 
     def showPickUp(self, base, placementpose, grasppose, jawwidth):
+        """
+        Given placement pose and grasp pose in numpy format and visualize them.
+        """
 
         tmphand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         tmphand.setJawwidth(jawwidth)
-        tmphand.setMat(pandanpmat4 = grasppose * placementpose)
+        tmphand.setMat(pandanpmat4 = pg.cvtMat4np4(grasppose) * pg.cvtMat4np4(placementpose))
 
-        pandageom.plotArrow(base.render, spos=self.getPointFromPose(grasppose * placementpose, Point3(0, 0, 0)),
-                                         epos=self.getPointFromPose(grasppose * placementpose, Point3(0, 1, 0)),
+        pandageom.plotArrow(base.render, spos=self.getPointFromPose(pg.cvtMat4np4(grasppose) * pg.cvtMat4np4(placementpose), Point3(0, 0, 0)),
+                                         epos=self.getPointFromPose(pg.cvtMat4np4(grasppose) * pg.cvtMat4np4(placementpose), Point3(0, 1, 0)),
                                          length=40,
                                          rgba=Vec4(0,1,0,1))
 
         cct0, cct1 = tmphand.getFingerTips()
-        cct0 = self.getPointFromPose(grasppose, cct0)
-        cct1 = self.getPointFromPose(grasppose, cct1)
+        cct0 = self.getPointFromPose(pg.cvtMat4np4(grasppose), cct0)
+        cct1 = self.getPointFromPose(pg.cvtMat4np4(grasppose), cct1)
 
         # show mass center
-        pandageom.plotSphere(base.render, pos=self.getPointFromPose(placementpose, Point3(self.objcom[0], self.objcom[1] , self.objcom[2])), radius=5, rgba=Vec4(1,0,0,1))
+        pandageom.plotSphere(base.render, pos=self.getPointFromPose(pg.cvtMat4np4(placementpose), Point3(self.objcom[0], self.objcom[1] , self.objcom[2])), radius=5, rgba=Vec4(1,0,0,1))
 
-        pandageom.plotSphere(base.render, pos=self.getPointFromPose(placementpose, Point3((cct0[0] + cct1[0])/2, (cct0[1] + cct1[1])/2, (cct0[2] + cct1[2])/2)), radius=5, rgba=Vec4(1,1,0,1))
+        pandageom.plotSphere(base.render, pos=self.getPointFromPose(pg.cvtMat4np4(placementpose), Point3((cct0[0] + cct1[0])/2, (cct0[1] + cct1[1])/2, (cct0[2] + cct1[2])/2)), radius=5, rgba=Vec4(1,1,0,1))
 
-        pandageom.plotArrow(base.render, spos=self.getPointFromPose(placementpose, Point3((cct0[0] + cct1[0])/2, (cct0[1] + cct1[1])/2, (cct0[2] + cct1[2])/2)),
-                                         epos=self.getPointFromPose(placementpose, Point3(self.objcom[0], self.objcom[1] , self.objcom[2])),
+        pandageom.plotArrow(base.render, spos=self.getPointFromPose(pg.cvtMat4np4(placementpose), Point3((cct0[0] + cct1[0])/2, (cct0[1] + cct1[1])/2, (cct0[2] + cct1[2])/2)),
+                                         epos=self.getPointFromPose(pg.cvtMat4np4(placementpose), Point3(self.objcom[0], self.objcom[1] , self.objcom[2])),
                                          length=100,
                                          rgba=Vec4(0,0,1,1))
 
@@ -313,7 +329,7 @@ class StablePickupPlanner(object):
         objecttemp.setTransparency(TransparencyAttrib.M_dual)
 
         # plot the object
-        objecttemp.setMat(placementpose)
+        objecttemp.setMat(pg.cvtMat4np4(placementpose))
         objecttemp.reparentTo(base.render)
 
         # self.npnodeobj.showTightBounds()
@@ -380,14 +396,13 @@ class StablePickupPlanner(object):
         placement2placement = []
         # according to all possible finger directions, a set of placements can be pivoted by that grasp
         # the placements is in a loop according to the fingertip direction
-        for fingerdirection, currentContactPoints, currentGraspsId in zip(fingerdirections, contactpointInPlane, graspsIdInPlane):
+        for fingerdirection, currentContactPoints, currentGraspsIds in zip(fingerdirections, contactpointInPlane, graspsIdInPlane):
             # get all grasps belong to this finger direction
             graspsBelongToCurrentPlane = np.stack(currentContactPoints)[:, :3]
 
             # ffdirections is the placement direction in the object frame
             # rotate corners are the rotate corners in the object frame
-            _, ffdirections, rotateCorners = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
-
+            _, ffdirections, rotateCornersInfo = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
             ffdirectionsMat = np.stack(ffdirections)
 
             manipulationPlaneXAxisMat = (np.array([
@@ -400,10 +415,16 @@ class StablePickupPlanner(object):
 
             massCenterInPlaneMat = (np.tensordot(self.objcom, manipulation_planeMat, (0,2)) / np.sum(manipulation_planeMat*manipulation_planeMat, axis=2)).transpose()
 
-            for l in range(len(rotateCorners)):
-                rotateCorners[l] = np.array(rotateCorners[l])
+            rotateCorners = []
+            validCornerBit = []
+
+            for l in range(len(rotateCornersInfo)):
+                rotateCorners.append(np.array([x for x, _ in rotateCornersInfo[l]]))
+                validCornerBit.append(np.array([x for _, x in rotateCornersInfo[l]]))
 
             for l in range(len(rotateCorners)):
+                if not validCornerBit[l].all(): # if some corners are not stable then skip
+                    continue
                 rotateCornersInPlane = rotateCorners[l].dot(manipulation_planeMat[:, l, :].transpose()) / np.sum(manipulation_planeMat[:, l, :]*manipulation_planeMat[:, l, :], axis=1)
                 graspsInCurrentPlane = graspsBelongToCurrentPlane.dot(manipulation_planeMat[:, l, :].transpose() / np.sum(manipulation_planeMat[:, l, :]*manipulation_planeMat[:, l, :], axis=1))
                 massCenterDirectionMat = (massCenterInPlaneMat[l] - rotateCornersInPlane)
@@ -422,10 +443,31 @@ class StablePickupPlanner(object):
 
                 valid_common_grasp_bit = commonvalidgrasps.all(0)
                 if valid_common_grasp_bit.any():
-                    left = l
-                    right = (l + 1) % len(rotateCorners)
-                    # need to verify the grasp has no collision with the ground
-                    placement2placement.append([ffdirections[left], ffdirections[right], np.array(currentGraspsId)[valid_common_grasp_bit], (rotateCorners[l][0], fingerdirection)])
+                    # calculate the placement pose with placement direction
+                    placementpose1 = self.placementdirection2pose(ffdirections[l])
+                    placementpose2 = self.placementdirection2pose(ffdirections[(l + 1) % len(rotateCorners)])
+
+                    # need to verify the grasp has no collision with the ground in two different placements
+                    validPivotGraspid = []
+
+                    for graspid in np.array(currentGraspsIds)[valid_common_grasp_bit]:
+
+                        pivotgrasp, pivotgraspJawwidth = self.gdb.loadFreeAirGripByIds(graspid)
+                        self.hand.setJawwidth(pivotgraspJawwidth)
+                        self.hand.setMat(pandanpmat4 = pivotgrasp * pg.cvtMat4np4(placementpose1))
+                        # add hand model to bulletworld
+                        hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
+                        result1 = self.bulletworldhp.contactTest(hndbullnode)
+
+                        self.hand.setMat(pandanpmat4 = pivotgrasp * pg.cvtMat4np4(placementpose2))
+                        # add hand model to bulletworld
+                        hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
+                        result2 = self.bulletworldhp.contactTest(hndbullnode)
+                        if not result1.getNumContacts() and not result2.getNumContacts():
+                            validPivotGraspid.append(graspid)
+
+
+                    placement2placement.append([placementpose1, placementpose2, validPivotGraspid, (rotateCorners[l][0], fingerdirection)])
 
         return placement2placement
 
@@ -451,11 +493,11 @@ class StablePickupPlanner(object):
         this function will visualize the pivot action
         """
         
-        placement1, placement2, graspids, pivotPoint = pivotaction
-
-        # calculate the placement poses according to the placement direction
-        placementpose1 = self.placementdirection2pose(placement1)
-        placementpose2 = self.placementdirection2pose(placement2)
+        placementpose1, placementpose2, graspids, pivotPoint = pivotaction
+        # placementpose1: first placement pose
+        # placementpose2: second placement pose
+        # graspids: a list of grasp ids to pivot from one placement to another
+        # the pivot point in the object frame
 
         p1 = rm.transformmat4(placementpose1, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose1, pivotPoint[0])[:3]
 
@@ -515,18 +557,48 @@ class StablePickupPlanner(object):
 
             tmphand.reparentTo(base.render)
 
+    def getPlacementIdFromPose(self, pose):
+        """
+        given a pose, this function will return the placement id whose has most simlilar pose.
+        """
+        obj_dir_pos_2match = pg.getGroundDirection(pose)
+        diff = 2.0 
+        closest_placementid = None
+        for placementid, placementpose in zip(self.placementid, self.tpsmat4s):
+            placement_pose = pg.mat4ToNp(placementpose)
+            currnt_dir_pos = pg.getGroundDirection(placement_pose)
+            
+            currnt_diff = np.linalg.norm(currnt_dir_pos - obj_dir_pos_2match)
+            if currnt_diff <= diff:
+                closest_placementid = placementid
+                diff = currnt_diff
+        return closest_placementid 
 
-    def createPlacementGraph(self, base):
+    def createPlacementGraph(self):
         '''
         create a pivoting graph
         '''
 
+        self.Graph = nx.Graph()
+
         fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
 
+        # generate a list of pair valid pivot action
         placement2placement = self.generateManipulationCircle(fingerdirections, contactpointInPlane, graspsIdInPlane)
 
-        # need to verify the function correctness
-        self.showPivot(placement2placement[2], base)
+        # build the graph
+        for p in placement2placement:
+            self.Graph.add_edge(self.getPlacementIdFromPose(p[0]), self.getPlacementIdFromPose(p[1]), pivotGraspids=p[2], pivotCorner=p[3])
+
+        # # need to verify the function correctness
+        # self.showPivot(placement2placement[0], base)
+
+    def getPivotPath(self, currentPlacement, targetPlacement):
+        result = []
+        path = nx.shortest_path(self.Graph, self.getPlacementIdFromPose(currentPlacement), self.getPlacementIdFromPose(targetPlacement))
+        for i in range(len(path)-1):
+            result.append([path[i], path[i+1], self.Graph.get_edge_data(path[i],path[i+1])['pivotGraspids'], self.Graph.get_edge_data(path[i],path[i+1])['pivotCorner']])
+        return result
 
 
 
@@ -550,21 +622,64 @@ if __name__ == '__main__':
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
 
+    regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
+
+    regrasp_planner.loadDB()
+
     pickup_planner = StablePickupPlanner(objpath, handpkg, gdb)
 
     # randomly get a initial grasp
     input_grasp, initial_placement = pickup_planner.randomlyPickOneGrasp()
-    # get random placement where the initial grasp is valid
 
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
+
     placedownPose = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
 
-    pickup_planner.createPlacementGraph(base)
+    pickup_planner.createPlacementGraph()
+
+    # find the pivot action sequence
+    pivotActionSequence = pickup_planner.getPivotPath(initial_placement, placedownPose)
+    # [placementid1, placementid2, list of pivot grasps, pivot corner point]
+
     # pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
     # pickup_planner.showPickUp(base, placedownPose, input_grasp[0], input_grasp[1])
     # pickup_planner.showPickUp(base, initial_placement, input_grasp[0], input_grasp[1])
 
+    # show initial grasp with initial placement
     
+
+    currentgrasp = input_grasp
+    currentplacement = initial_placement
+
+    def scalePose(pose):
+        result = np.copy(pose)
+        result[0][3] = result[0][3] / 1000.0
+        result[1][3] = result[1][3] / 1000.0
+        result[2][3] = result[2][3] / 1000.0
+        return result
+
+    for action in pivotActionSequence:
+        placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
+        placement1pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid1))
+        placement2pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid2))
+
+        grasp_trajectory = None
+
+        counter = 2
+
+        for pgl in pivotGraspslist:
+
+            counter -= 1
+
+            pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
+
+            grasp_trajectory = regrasp_planner.getTrajectory(scalePose(currentgrasp[0]), scalePose(pg.mat4ToNp(pivotgrasp)), pivotgraspJawwidth / 1000.0, scalePose(currentplacement), base)
+            if not grasp_trajectory == None:
+                break
+            if counter == 0:
+                break
+
+        print(grasp_trajectory)
 
 
     def updateworld(world, task):

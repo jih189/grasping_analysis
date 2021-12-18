@@ -17,6 +17,7 @@ sql = """create table dmgs (
                     iddmg int primary key,
                     idobject int,
                     placementpose char(250),
+                    placementid int,
                     planevector char(140)
                 )"""
 

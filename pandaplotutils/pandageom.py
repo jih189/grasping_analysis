@@ -822,7 +822,8 @@ def mat4ToNp(pdmat4):
     row2 = pdmat4.getRow(2)
     row3 = pdmat4.getRow(3)
 
-    return np.array([[row0[0], row1[0], row2[0], row3[0]], [row0[1], row1[1], row2[1], row3[2]],
+
+    return np.array([[row0[0], row1[0], row2[0], row3[0]], [row0[1], row1[1], row2[1], row3[1]],
                      [row0[2], row1[2], row2[2], row3[2]], [row0[3], row1[3], row2[3], row3[3]]])
 
 def v3ToNp(pdv3):
@@ -913,6 +914,17 @@ def makelsnodepath(linesegs,thickness=1, rgbacolor=[1,1,1,1]):
     lsnp.setTransparency(TransparencyAttrib.MAlpha)
     return lsnp
 
+def getGroundDirection(pose):
+    """
+    compute the ground direction according to the pose
+
+    """
+    gnd_dir = np.array([0,0,-1]) #ground direction (i.e gravity vector )
+    pos_r = pose[:3,:3]
+    obj_grd_dir_pos = np.dot(np.transpose(pos_r), gnd_dir) # vecktro containing the dir of the object to the groud in the object frame
+    obj_grd_dir_pos= obj_grd_dir_pos/ np.linalg.norm(obj_grd_dir_pos)
+    return obj_grd_dir_pos
+
 def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     """
     compute the contour according to a direction
@@ -952,6 +964,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
 
     # get mass center on 2d
     mass_center_2d = Point(rm.transformmat4(rotateMatrix, mass_center)[:2])
+    mass_center_height = rm.transformmat4(rotateMatrix, mass_center)[2]
 
     for i in range(len(objtrimesh.faces)):
         vert0 = objtrimesh.vertices[objtrimesh.faces[i][0]]
@@ -968,10 +981,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
             facetp.append(facep.buffer(10))
 
     facetp = cascaded_union(facetp).buffer(-10)
-    
-    # p = gpd.GeoSeries(facetp)
-    # p.plot()
-    # plt.show()
 
     if not type(facetp) == Polygon:
         return [], []
@@ -1012,6 +1021,24 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     
     # calculate the ff direction
     for p in range(len(verts2d) - 1):
+
+        # find the two support point
+        lowestPivotPoint = None
+        highestPivotPoint = None
+        for i in range(len(objtrimesh.faces)):
+            for j in range(3):
+                vertp = rm.transformmat4(rotateMatrix, objtrimesh.vertices[objtrimesh.faces[i][j]])
+                if np.linalg.norm(vertp[:2] - verts2d[p+1][:2]) < 2.0:
+                    if lowestPivotPoint == None and highestPivotPoint == None:
+                        lowestPivotPoint = vertp[2]
+                        highestPivotPoint = vertp[2]
+                    if vertp[2] > highestPivotPoint:
+                        highestPivotPoint = vertp[2]
+                    if vertp[2] < lowestPivotPoint:
+                        lowestPivotPoint = vertp[2]
+
+        # if mass center is not between two support corner points, then this pivot corner is not stable
+        isStablePivotPoint = lowestPivotPoint - 5 < mass_center_height and highestPivotPoint + 5 > mass_center_height
         
         line_2d = LineString([verts2d[p], verts2d[p+1]])
         
@@ -1019,23 +1046,20 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         interaction = nearest_points(line_2d, mass_center_2d)[0]
         ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
         # if the mass center does not project onto the line, the ignore it
-        # todo: it is too close to the boundary, it should be ignore as well
-        
         if (interaction == verts2d[p] or interaction == verts2d[p+1]) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
             if p == 0:
                 isFirstPlacementStable = False
                 pivotpoints.append([])
 
             # not a relative stable placement
-            # pivotpoints[-1].append(verts2d[p+1])
-            pivotpoints[-1].append(rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3])
+            pivotpoints[-1].append([rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint])
             if p == len(verts2d) - 2 and not isFirstPlacementStable:
                 pivotpoints[-1] += pivotpoints[0]
                 pivotpoints.pop(0)
             continue
 
-        # pivotpoints.append([verts2d[p+1]])
-        pivotpoints.append([rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3]])
+        # for next pivot group
+        pivotpoints.append([[rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint]])
 
         if p == len(verts2d) - 2 and not isFirstPlacementStable:
             pivotpoints[-1] += pivotpoints[0]

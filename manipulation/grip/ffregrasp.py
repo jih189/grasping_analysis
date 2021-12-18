@@ -24,7 +24,7 @@ from database import dbaccess as db
 
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
-from scipy.spatial import Voronoi, voronoi_plot_2d
+from scipy.spatial import Voronoi, voronoi_plot_2d, Delaunay
 from scipy.special import softmax
 
 from trimesh import geometry as trigeom
@@ -37,24 +37,22 @@ class dexterousManipulationGraph:
         
         # this function will read a set of possible angles and edges to build the dexterous manipulation graph
         self.nodes = None # [ [g0,g5], [g1,g2],[g3,g4,gx...], ....]
-        self.ang_range_node_idx = []  #[ 0,0, 1,1 2,2,...]
-        self.Graph = None
-        self._convert_to_networkX(angle_range,edges, is_converted) #Sets nodes and creates a graph with edges using nodes
-        
-            
+        self.Graph = nx.Graph()
+        self.convert_to_networkX(angle_range, edges, is_converted) #Sets nodes and creates a graph with edges using nodes
         
     # this function will read in the angle range and edges, then convert to a form used by networkX
-    def _convert_to_networkX(self, angle_range, edges, is_converted):
-        G = nx.Graph()
-        if not is_converted:
-            simp_angle_range = [item for sublist in angle_range for item in sublist]
-            self.nodes = simp_angle_range
-        
+    def convert_to_networkX(self, angle_range, edges, is_converted):
+        """
+        when we create the dmg, given angle range is in following format:
+        [[anglerange1, anglerange2], [anglerange3], ]
+        each element in list is a list of angle range sharing the same contact point.
 
-            for i , angel_range in enumerate(self.nodes):
-                G.add_node(i)
-                for _ in angel_range:                    
-                    self.ang_range_node_idx.append(i)
+        """
+
+        if not is_converted:
+            self.nodes = [item for sublist in angle_range for item in sublist]
+            for i in range(len(self.nodes)):
+                self.Graph.add_node(i)
             
             helper_nodes_cnt = []
             tmp = 0
@@ -62,80 +60,54 @@ class dexterousManipulationGraph:
                 helper_nodes_cnt.append(tmp)
                 tmp += len(angle_range[i])
             
-            
             for i in range(0,len(edges)):
                 e1 = helper_nodes_cnt[ edges[i][0][0] ] + edges[i][0][1]
                 e2 = helper_nodes_cnt[ edges[i][1][0] ] + edges[i][1][1]
                 c = edges[i][2]
-                #simp_angle_edge.append((e1,e2))
-                G.add_edge(e1,e2, connectgrasp=c, edgenode = (e1, e2))
+                self.Graph.add_edge(e1,e2, connectgrasp=c, edgenode = (e1, e2))
         else:
             self.nodes = angle_range
             for i in range(0,len(edges)):
-                G.add_edge(edges[i][0], edges[i][1], connectgrasp=edges[i][2], edgenode = (edges[i][0], edges[i][1]))
-                
+                self.Graph.add_edge(edges[i][0], edges[i][1], connectgrasp=edges[i][2], edgenode = (edges[i][0], edges[i][1]))
 
-        self.Graph = G
 
     def getEdges(self):
         return self.Graph.edges.data()
 
     def getAngleRange(self):
         return self.nodes
-
-    def get_closest_angle_range(self, grasp):
-        "Given the a grasp, this function will return the closeset angel range to that grasp"
-        tran_diff = []
-        rot_diff = []
-        grasp_inv_rot = np.transpose(grasp[:3,:3])
-        grasp_trans = grasp[:,3:]
-
-        for angel_range in self.nodes:
-            for pos in angel_range:
-                pos_rot = pos[:3,:3]
-                pos_tran = pos[:,3:]
-
-                rot = R.from_dcm(np.dot(grasp_inv_rot,pos_rot))
-                crnt_rot_diff = np.linalg.norm(rot.as_rotvec())
-
-                crnt_tran_diff = np.linalg.norm(pos_tran - grasp_trans)
-                tran_diff.append(crnt_tran_diff)
-                rot_diff.append(crnt_rot_diff)
-                            
-        
-        #Normilize and add trans and rot diff together
-        tran_diff = softmax(tran_diff)
-        rot_diff = softmax(rot_diff)
-        tran_N_rot_dif = [ x[0]+x[1]  for x in zip(tran_diff, rot_diff) ]
-
-        closet_ang_range_idx = self.ang_range_node_idx[np.argmin(tran_N_rot_dif)] #find the min diff, return angle_range idx
-        return self.nodes[closet_ang_range_idx], closet_ang_range_idx
-
-
-
     
-    def insert_init_grasp_2_DMG(self, clst_ang_range_idx, grasp,c_grasp_idx):
+    def insert_init_grasp_2_DMG(self, clst_ang_range_idx, grasp, c_grasp_idx):
+
         self.nodes.append([grasp])
-        grasp_idx = len(self.nodes)-1
+        grasp_idx = len(self.nodes) - 1
         self.start_grasp_and_idx = (grasp, grasp_idx)
-        self.ang_range_node_idx.append(grasp_idx)
 
         self.Graph.add_node(grasp_idx)
         self.Graph.add_edge(clst_ang_range_idx,grasp_idx, connectgrasp=(c_grasp_idx,0), edgenode = (clst_ang_range_idx, grasp_idx))
+
 
     def insert_end_grasp_2_DMG(self, clst_ang_range_idx, grasp, c_grasp_idx):
         self.nodes.append([grasp])
-        grasp_idx = len(self.nodes)-1
+        grasp_idx = len(self.nodes) - 1
         self.end_grasp_and_idx = (grasp, grasp_idx)
-        self.ang_range_node_idx.append(grasp_idx)
 
         self.Graph.add_node(grasp_idx)
         self.Graph.add_edge(clst_ang_range_idx,grasp_idx, connectgrasp=(c_grasp_idx,0), edgenode = (clst_ang_range_idx, grasp_idx))
-        
 
+    def remove_init_and_end_grasp_from_DMG(self):
+        """
+        remove the initial and target nodes from the DMG
+        """
+        # pop end grasp
+        self.nodes.pop()
+        self.Graph.remove_node(self.end_grasp_and_idx[1])
+        # pop start grasp
+        self.nodes.pop()
+        self.Graph.remove_node(self.start_grasp_and_idx[1])
 
-        """Checks if grasp points have a possible path"""
     def is_trajectory_possible(self, st_grasp_idx,ed_grasp_idx):
+        """Checks if grasp points have a possible path"""
         try:
             return nx.shortest_path(self.Graph,st_grasp_idx,ed_grasp_idx)
         except Exception as e:
@@ -148,6 +120,7 @@ class dexterousManipulationGraph:
         if not self.start_grasp_and_idx or not self.end_grasp_and_idx:
             print("Please give a start and/or End grasp")
             exit()
+
         path_nodes = self.is_trajectory_possible(self.start_grasp_and_idx[1],self.end_grasp_and_idx[1])
 
         if path_nodes == None:
@@ -165,9 +138,6 @@ class dexterousManipulationGraph:
             connect_grasp = self.Graph.get_edge_data(currnt_node, next_node)['connectgrasp']
             if edgenode[0] == currnt_node:
                 currnt_pos = self.nodes[edgenode[0]][connect_grasp[0]]
-                # print(edgenode[1])
-                # print(connect_grasp[1])
-                # print(len(self.nodes[edgenode[1]]))
                 next_pos = self.nodes[edgenode[1]][connect_grasp[1]]
                 if not in_ang_idx:
                     in_ang_idx = (edgenode[1], connect_grasp[1])
@@ -207,9 +177,9 @@ def PandaPosMax_t_PosMat(panda_posmtx):
     """The panda pose matrix needs to be scaled and transposed to be a normal pose matrix form."""
 
     mat = np.array([[panda_posmtx[0][0],panda_posmtx[1][0],panda_posmtx[2][0],panda_posmtx[3][0]/1000.0], \
-                     [panda_posmtx[0][1],panda_posmtx[1][1],panda_posmtx[2][1],panda_posmtx[3][1]/1000.0], \
-                     [panda_posmtx[0][2],panda_posmtx[1][2],panda_posmtx[2][2],panda_posmtx[3][2]/1000.0], \
-                     [0.0,0.0,0.0,1.0]])
+                    [panda_posmtx[0][1],panda_posmtx[1][1],panda_posmtx[2][1],panda_posmtx[3][1]/1000.0], \
+                    [panda_posmtx[0][2],panda_posmtx[1][2],panda_posmtx[2][2],panda_posmtx[3][2]/1000.0], \
+                    [0.0,0.0,0.0,1.0]])
 
     # if not isRotationMatrix(mat[:3,:3]):
     #     raise Exception("The rotation part is not a rotation matrix!!")
@@ -353,7 +323,7 @@ class ff_regrasp_planner(object):
         sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % self.dbobjname
         result = gdb.execute(sql)
         if not result:
-            print("No such object exist in databse!!!")
+            print("No such object exist in database!!!")
             return
         else:
             objectId = int(result[0][0]) 
@@ -425,36 +395,6 @@ class ff_regrasp_planner(object):
         for i in range(len(self.placementid)):
             handrotmat, hndjawwidth, hndcontactpoint0, hndcontactpoint1 = self.loadFreeAirGripWithPlacementId(self.placementid[i])
             self.gripsOfPlacement.append((handrotmat, hndjawwidth, hndcontactpoint0, hndcontactpoint1))
-
-    def showOnePlacementAndAssociatedGrips(self, base, i):
-        """
-        show one placement and its associated grasps
-        :param base:
-        :return:
-        """
-
-        objrotmat = self.tpsmat4s[i]
-        rotzmat = Mat4.rotateMat(0, Vec3(0,0,1))
-        objrotmat = objrotmat*rotzmat
-        # show object
-        geom = pg.packpandageom(self.objtrimesh.vertices,
-                                self.objtrimesh.face_normals,
-                                self.objtrimesh.faces)
-        node = GeomNode('obj')
-        node.addGeom(geom)
-        star = NodePath('obj')
-        star.attachNewNode(node)
-        star.setColor(Vec4(.7,0.3,0,1))
-        star.setTransparency(TransparencyAttrib.MAlpha)
-        star.setMat(objrotmat)
-        star.reparentTo(base.render)
-
-        for handrotmat, hndjawwidth in zip(self.gripsOfPlacement[i][0], self.gripsOfPlacement[i][1]):
-
-            tmphnd = self.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
-            tmphnd.setMat(pandanpmat4 = handrotmat)
-            tmphnd.setJawwidth(hndjawwidth)
-            tmphnd.reparentTo(base.render)
 
     def getStep(self, start_grasp, goal_grasp):
 
@@ -542,9 +482,10 @@ class ff_regrasp_planner(object):
         return poseTrajectory
 
     # the plane is represneted by (x,y,z,nx,ny,nz) where nx,ny,nz is the normal vector of the plane
-    def isSamePlane(self, plane1, plane2):
-        if plane1[3] * (plane2[0] - plane1[0]) + plane1[4] * (plane2[1] - plane1[1]) + plane1[5] * (plane2[2] - plane1[2]) < 2.0 \
-            and plane2[3] * (plane1[0] - plane2[0]) + plane2[4] * (plane1[1] - plane2[1]) + plane2[5] * (plane1[2] - plane2[2]) < 2.0:
+    def isSamePlane(self, plane1, plane2, threshold = 2.0):
+        if plane1[3] * (plane2[0] - plane1[0]) + plane1[4] * (plane2[1] - plane1[1]) + plane1[5] * (plane2[2] - plane1[2]) < threshold \
+            and plane2[3] * (plane1[0] - plane2[0]) + plane2[4] * (plane1[1] - plane2[1]) + plane2[5] * (plane1[2] - plane2[2]) < threshold \
+            and np.linalg.norm(plane1[3:] - plane2[3:]) < 0.3:
             return True
         else:
             return False
@@ -553,14 +494,15 @@ class ff_regrasp_planner(object):
         # find all point pairs
         point_pairs = []
 
+        # get all contact point pair relative to current placement
         contactpoint0s = self.gripsOfPlacement[placementid][2]
         contactpoint1s = self.gripsOfPlacement[placementid][3]
         
+        # ensure there are no duplicated contact point pairs
         for c0, c1 in zip(contactpoint0s, contactpoint1s):
             isNew = True
             for r in point_pairs:
                 if np.linalg.norm(r[0] - c0) < 0.1 and np.linalg.norm(r[1] - c1) < 0.1:
-                    # if r[0][0] == c0[0] and r[0][1] == c0[1] and r[0][2] == c0[2] and r[1][0] == c1[0] and r[1][1] == c1[1] and r[1][2] == c1[2]:
                     isNew = False
                     break
             if isNew:
@@ -589,7 +531,8 @@ class ff_regrasp_planner(object):
 
         plane_lists= []
         point_pairs_lists = []
-        # recalculate the plane
+
+        # recalculate the plane, ensure grasps stay into the same plane
         for i in range(len(plane_lists_temp)):
             if len(plane_of_point_pairs_list[i]) <= 2:
                 continue
@@ -615,15 +558,17 @@ class ff_regrasp_planner(object):
                       pose[0][1] * point[0] + pose[1][1] * point[1] + pose[2][1] * point[2] + pose[3][1], \
                       pose[0][2] * point[0] + pose[1][2] * point[1] + pose[2][2] * point[2] + pose[3][2])
 
-    def generate_angle_and_feasibleMask(self, placement, point_pairs, plane_normal, base):
+    def generate_angle_and_feasibleMask(self, point_pairs, plane_normal, base):
+        """
+        For each point pair, it generate a set of grasp sharing this pair, and a mask bit which represents its valid.
+        remind: each angle set, they could have multiple angle ranges.
+        """
         discretesize = 16 # this value should not be 0 or 1
         point_pairs_temp = list(point_pairs)
         angleSet = []
         angleMask = []
         
         for c0, c1 in point_pairs_temp:
-            # pandageom.plotSphere(base.render, pos=Point3(c0[0], c0[1], c0[2]), radius=5, rgba=Vec4(1,0,0,1))
-            # pandageom.plotSphere(base.render, pos=Point3(c1[0], c1[1], c1[2]), radius=5, rgba=Vec4(1,0,0,1))
             if self.getAngleBetweenDirection(c1-c0, plane_normal) < 1.59:
                 tmp = c0
                 c0 = c1
@@ -657,8 +602,7 @@ class ff_regrasp_planner(object):
                 result1 = self.bulletObj.contactTest(hndbullnode)
                 if result0.getNumContacts() or result1.getNumContacts():
                     mask[angleid] = False
-                # else:
-                #     tmphand.reparentTo(base.render)
+
                 tmphand.removeNode()
 
             # split into angleranges
@@ -700,12 +644,7 @@ class ff_regrasp_planner(object):
             grasp_points_2d.append(rm.transformmat4(rotateMatrix, grasp_point_pairs[i][0])[:2])
         grasp_points_2d = np.array(grasp_points_2d)
         vor = Voronoi(grasp_points_2d)
-        # voronoi_plot_2d(vor)
-        # # for i in range(len(vor.ridge_points)):
-        # #     p_x = [grasp_points_2d[vor.ridge_points[i,0]][0], grasp_points_2d[vor.ridge_points[i,1]][0]]
-        # #     p_y = [grasp_points_2d[vor.ridge_points[i,0]][1], grasp_points_2d[vor.ridge_points[i,1]][1]]
-        # #     plt.plot(p_x, p_y)
-        # plt.show()
+
         return vor.ridge_points
 
     def getCommonBit(self, mask1, mask2):
@@ -747,6 +686,9 @@ class ff_regrasp_planner(object):
         return result, (firstOfMask1, firstOfMask2)
 
     def rotate(self, angleRange, n):
+        """
+        rotate the list with n step
+        """
         return angleRange[n:] + angleRange[:n]
 
     def getSideOfAngleRange(self, mask):
@@ -768,23 +710,31 @@ class ff_regrasp_planner(object):
                 endOfAngleRange = i - 1
         return firstOfAngleRange, endOfAngleRange
 
-    def build_regrasp_graph(self, placement, plane, point_pairs, base):
-        # for each plane, there should be two DMG
-        angleSet, angleMask = self.generate_angle_and_feasibleMask(placement, point_pairs, plane[3:], base)
+    def build_regrasp_graph(self, plane, point_pairs, base):
+        """
+        Given a placement and one of its motion plane and relative contact point pairs, 
+        this function will generate a dmg which is used to generate the end-effector motion
+        over the object surface.
+        """
 
+        # for each point pair, we generate its angle set and valid mask.
+        angleSet, angleMask = self.generate_angle_and_feasibleMask(point_pairs, plane[3:], base)
+
+        # according to the plane and point pairs, we generate a voroni graph and connect them.
         voroni_grasp_point_edges = self.get_contact_point_edge_by_voronoi(point_pairs, plane)
         angleRange_edges = []
         for idx1, idx2 in voroni_grasp_point_edges:
             for i in range(len(angleMask[idx1])):
                 for j in range(len(angleMask[idx2])):
-                    isConnect, commonBit = self.getCommonBit(angleMask[idx1][i], angleMask[idx2][j])# we may also store the common edges grasps
+                    isConnect, commonBit = self.getCommonBit(angleMask[idx1][i], angleMask[idx2][j]) # we may also store the common edges grasps
 
                     if isConnect:
                         angleRange_edges.append(((idx1, i),(idx2,j),commonBit))
         
-        angleRange = [[] for _ in range(len(angleMask))]
+        angleRange_list = [[] for _ in range(len(angleMask))]
 
         # generate angle ranges
+        # with following code, each side of the angle range will be at the beginning or ending of the angle range list.
         for i in range(len(angleMask)):
             for j in range(len(angleMask[i])):
                 firstOfAngleRange, endOfAngleRange = self.getSideOfAngleRange(angleMask[i][j])
@@ -793,35 +743,33 @@ class ff_regrasp_planner(object):
                 if endOfAngleRange < firstOfAngleRange:
                     newAngleRange = self.rotate(newAngleRange, endOfAngleRange + 1)
 
-                angleRange[i].append(newAngleRange)
+                angleRange_list[i].append(newAngleRange)
 
         # build the DMG with angleRange and angleRange_edges
-        DMG = dexterousManipulationGraph(angleRange,angleRange_edges)
+        DMG = dexterousManipulationGraph(angleRange_list, angleRange_edges)
         return DMG
 
     def build_regrasp_graph_for_all_placements(self, base):
-        print("number of placement = ", len(self.tpsmat4s))
+        """
+        generate dmg for each placement
+        For each element of regrasp_graph, it contains a list of pair with plane and its dmg.
+        """
+        # print("number of placement = ", len(self.tpsmat4s))
         self.regrasp_graph = [[] for _ in range(len(self.tpsmat4s))]
         for placementid, placement in enumerate(tqdm(self.tpsmat4s)):
-            # if placementid != 2: # you can choose to build only selected dmg by uncommon here
-            #     continue
 
             # need to group grasp point pairs by plane in one placement
+            # i-th list of point pairs list is all contact point pair in the i-th motion plane.
             point_pairs_list, plane_list = self.group_grasp_points_by_planes(placementid)
 
             # need to render the object for current placement
             self.renderObject(base, placement)
             
             for plane, point_pairs in zip(plane_list, point_pairs_list):
-                # for each plane, there will be two DMGs for different side
-                plane1 = plane.copy()
-                dmg1 = self.build_regrasp_graph(placement, plane1, point_pairs, base)
-                plane2 = plane.copy()
-                plane2[3:6] *= -1.0
-                dmg2 = self.build_regrasp_graph(placement, plane2, point_pairs, base)
-                self.regrasp_graph[placementid].append((plane1, dmg1))
-                self.regrasp_graph[placementid].append((plane2, dmg2))
-        self.cleanRenderedObject(base)
+                self.regrasp_graph[placementid].append((plane, self.build_regrasp_graph(plane, point_pairs, base)))
+
+            self.cleanRenderedObject(base)
+
 
     # get the ground direction vector from pose in object frame
     def getGroundDirection(self, pose):
@@ -835,15 +783,6 @@ class ff_regrasp_planner(object):
         return Point3(pose[0][0] * point[0] + pose[1][0] * point[1] + pose[2][0] * point[2] + pose[3][0], \
                       pose[0][1] * point[0] + pose[1][1] * point[1] + pose[2][1] * point[2] + pose[3][1], \
                       pose[0][2] * point[0] + pose[1][2] * point[1] + pose[2][2] * point[2] + pose[3][2])
-
-    def isBelongToPlane(self, p, plane):
-        # check whether the normal direction is similar
-        if np.linalg.norm(p[3:6] - plane[3:6]) > 0.1:
-            return False
-        # check two planes are in the same plane
-        if plane[3] * (p[0] - plane[0]) + plane[4] * (p[1] - plane[1]) + plane[5] * (p[2] - plane[2]) > 15.0:
-            return False
-        return True
 
     def getPlacementId(self, placement):
         # get the proper placement id
@@ -893,9 +832,9 @@ class ff_regrasp_planner(object):
 
         for i in range(len(self.regrasp_graph[placement_id])):
             plane_direction = self.regrasp_graph[placement_id][i][0]
-            if self.isBelongToPlane(init_grasp_plane, plane_direction):
+            if self.isSamePlane(init_grasp_plane, plane_direction, 15.0):
                 init_grasp_plane_id = i
-            if self.isBelongToPlane(target_grasp_plane, plane_direction):
+            if self.isSamePlane(target_grasp_plane, plane_direction, 15.0):
                 target_grasp_plane_id = i
 
         tmphand.removeNode()
@@ -938,18 +877,10 @@ class ff_regrasp_planner(object):
         pose_angleRange.sort(key=sortfun) # pose angle range: (grasp pose, angle range id, pose difference)
 
         for p in pose_angleRange:
-            # return p[1], p[3]
             if self.checkCollisionBetweenGrasps(grasp, p[0], jawwidth, base):
                 return p[1], p[3]
 
         return None, None
-        # # show the init grasp
-        # tmphnd = self.handpkg.newHandNM(hndcolor=[1, 0, 0, .5])
-        # tmphnd.setMat(pandanpmat4 = PosMat_t_PandaPosMax(closestPose))
-        # tmphnd.setJawwidth(80)
-        # tmphnd.reparentTo(base.render)
-        
-        # return angleRangeId
 
     # This function will read numpy pose matrix
     def getTrajectory(self, _init_grasp, _target_grasp, jawwidth, _placement, base):
@@ -964,8 +895,6 @@ class ff_regrasp_planner(object):
         
         init_grasp_plane_id, target_grasp_plane_id = self.getDMGWithPlacementAndGrasp(placementid, init_grasp, target_grasp)
 
-        self.renderObject(base, self.tpsmat4s[placementid])
-
         if init_grasp_plane_id == None or target_grasp_plane_id == None:
             print("init grasp or target grasp does not belong to any plane")
             return None
@@ -973,25 +902,37 @@ class ff_regrasp_planner(object):
             print("init grasp and target grasp does not share the same plane")
             return None
 
+        self.renderObject(base, self.tpsmat4s[placementid])
+
         dmg = self.regrasp_graph[placementid][init_grasp_plane_id][1]
         angleRanges = dmg.getAngleRange()
+
         angleRange_idx_init_grasp, init_connect_grasp = self.get_closest_angle_range(angleRanges, init_grasp, jawwidth, base)
         angleRange_idx_target_grasp, target_connect_grasp = self.get_closest_angle_range(angleRanges, target_grasp, jawwidth, base)
 
         if angleRange_idx_init_grasp == None:
+            self.cleanRenderedObject(base)
+            print("can't find angle range index of initial grasp")
             return None
         if angleRange_idx_target_grasp == None:
+            self.cleanRenderedObject(base)
+            print("can't find angle range index of target grasps")
             return None
+
+        print("angle range of init grasp ", angleRange_idx_init_grasp)
+        print(dmg.Graph.has_node(angleRange_idx_init_grasp))
+        print("angle range of target grasp ", angleRange_idx_target_grasp)
+        print(dmg.Graph.has_node(angleRange_idx_target_grasp))
 
         dmg.insert_init_grasp_2_DMG(angleRange_idx_init_grasp, init_grasp, init_connect_grasp)
         dmg.insert_end_grasp_2_DMG(angleRange_idx_target_grasp, target_grasp, target_connect_grasp)
         poseTrajectory = dmg.getGraspTrajectory()
+        dmg.remove_init_and_end_grasp_from_DMG()
 
         if poseTrajectory == None:
+            self.cleanRenderedObject(base)
+            print("can't find pose trajectory for unknown reason")
             return None
-
-
-        # print("ABOUT TO ENTER WHILE")
 
         # need to shorten the trajectory
         shortenPoseTrajectory = []
@@ -1007,7 +948,6 @@ class ff_regrasp_planner(object):
                 else:
                     j -= 1
 
-        # print("MADE IT PAST WHILE")
         self.cleanRenderedObject(base)
 
         # convert the pose Trajectory from table frame back to object frame
@@ -1017,92 +957,92 @@ class ff_regrasp_planner(object):
           result.append(inv_placement_mat.dot(pose))
         return result
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-    base = pandactrl.World(camp=[700,300,1400], lookatp=[0,0,0])
-    this_dir, this_filename = os.path.split(__file__)
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+#     base = pandactrl.World(camp=[700,300,1400], lookatp=[0,0,0])
+#     this_dir, this_filename = os.path.split(__file__)
+#     objpath = os.path.join(this_dir, "objects", "book.stl")
 
-    handpkg = fetch_grippernm
-    gdb = db.GraspDB()
-    regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
-    regrasp_planner.build_regrasp_graph_for_all_placements(base)
+#     handpkg = fetch_grippernm
+#     gdb = db.GraspDB()
+#     regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
+#     regrasp_planner.build_regrasp_graph_for_all_placements(base)
 
-    placementId = 3
-    startGraspId = 1
-    goalGraspId = 10
+#     placementId = 3
+#     startGraspId = 1
+#     goalGraspId = 10
 
-    startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
-    goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
-    placementPose = regrasp_planner.getPlacement(placementId)
-    inv_placementPose = np.linalg.inv(PandaPosMax_t_PosMat(placementPose))
-    # pass the init grasp and target grasp in object frame
-    # pass the object placement in the table frame
-    grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 0.08, PandaPosMax_t_PosMat(placementPose), base)
+#     startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
+#     goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
+#     placementPose = regrasp_planner.getPlacement(placementId)
+#     inv_placementPose = np.linalg.inv(PandaPosMax_t_PosMat(placementPose))
+#     # pass the init grasp and target grasp in object frame
+#     # pass the object placement in the table frame
+#     grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 0.08, PandaPosMax_t_PosMat(placementPose), base)
 
 
-    poseTrajectory = []
-    for g in range(len(grasp_trajectory) - 1):
-        trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]))
-        poseTrajectory.extend(trajectory)
+#     poseTrajectory = []
+#     for g in range(len(grasp_trajectory) - 1):
+#         trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]))
+#         poseTrajectory.extend(trajectory)
 
-    ################ following code is used to demo ####################################################
-    # poseTrajectory: a grasp pose trajectory from start pose to goal pose
-    # create a hand for demo
-    # starthnd = regrasp.handpkg.newHandNM(hndcolor=[0, 0, 1, 0.5])
-    # starthnd.setMat(pandanpmat4 = startPose_panda)
-    # starthnd.setJawwidth(startJawwidth_panda)
-    # starthnd.reparentTo(base.render)
+#     ################ following code is used to demo ####################################################
+#     # poseTrajectory: a grasp pose trajectory from start pose to goal pose
+#     # create a hand for demo
+#     # starthnd = regrasp.handpkg.newHandNM(hndcolor=[0, 0, 1, 0.5])
+#     # starthnd.setMat(pandanpmat4 = startPose_panda)
+#     # starthnd.setJawwidth(startJawwidth_panda)
+#     # starthnd.reparentTo(base.render)
 
-    # goalhnd = regrasp.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
-    # goalhnd.setMat(pandanpmat4 = goalPose_panda)
-    # goalhnd.setJawwidth(goalJawwidth_panda)
-    # goalhnd.reparentTo(base.render)
+#     # goalhnd = regrasp.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
+#     # goalhnd.setMat(pandanpmat4 = goalPose_panda)
+#     # goalhnd.setJawwidth(goalJawwidth_panda)
+#     # goalhnd.reparentTo(base.render)
 
-    objtrimesh=trimesh.load_mesh(objpath)
-    geom = pg.packpandageom(objtrimesh.vertices,
-                            objtrimesh.face_normals,
-                            objtrimesh.faces)
+#     objtrimesh=trimesh.load_mesh(objpath)
+#     geom = pg.packpandageom(objtrimesh.vertices,
+#                             objtrimesh.face_normals,
+#                             objtrimesh.faces)
 
-    node = GeomNode('obj')
-    node.addGeom(geom)
-    star = NodePath('obj')
-    star.attachNewNode(node)
-    star.setColor(Vec4(.7,0.3,0,1))
-    star.setTransparency(TransparencyAttrib.MAlpha)
-    star.setMat(placementPose)
-    star.reparentTo(base.render)
+#     node = GeomNode('obj')
+#     node.addGeom(geom)
+#     star = NodePath('obj')
+#     star.attachNewNode(node)
+#     star.setColor(Vec4(.7,0.3,0,1))
+#     star.setTransparency(TransparencyAttrib.MAlpha)
+#     star.setMat(placementPose)
+#     star.reparentTo(base.render)
     
-    currenthnd = regrasp_planner.handpkg.newHandNM(hndcolor=[0, 0.5, 0.5, 0.5])
-    currenthnd.setJawwidth(startJawwidth_panda)
-    currenthnd.reparentTo(base.render)
+#     currenthnd = regrasp_planner.handpkg.newHandNM(hndcolor=[0, 0.5, 0.5, 0.5])
+#     currenthnd.setJawwidth(startJawwidth_panda)
+#     currenthnd.reparentTo(base.render)
 
-    counter = 0
-    def myFunction(task, poseTrajectory):
-        global counter
-        if counter > len(poseTrajectory) - 1:
-            return task.done
+#     counter = 0
+#     def myFunction(task, poseTrajectory):
+#         global counter
+#         if counter > len(poseTrajectory) - 1:
+#             return task.done
 
-        currenthnd.setMat(pandanpmat4 = PosMat_t_PandaPosMax(poseTrajectory[counter]))
-        counter += 1
-        return task.again
+#         currenthnd.setMat(pandanpmat4 = PosMat_t_PandaPosMax(poseTrajectory[counter]))
+#         counter += 1
+#         return task.again
 
-    # show the collision net
-    def updateworld(world, task):
-        world.doPhysics(globalClock.getDt())
-        return task.cont
+#     # show the collision net
+#     def updateworld(world, task):
+#         world.doPhysics(globalClock.getDt())
+#         return task.cont
 
-    debugNode = BulletDebugNode('Debug')
-    debugNode.showWireframe(True)
-    debugNode.showConstraints(True)
-    debugNode.showBoundingBoxes(False)
-    debugNode.showNormals(False)
-    bullcldrnp = base.render.attachNewNode("bulletcollider")
-    debugNP = bullcldrnp.attachNewNode(debugNode)
-    debugNP.show()
-    regrasp_planner.bulletworldhp.setDebugNode(debugNP.node())
-    taskMgr.add(updateworld, "updateworld", extraArgs=[regrasp_planner.bulletworldhp], appendTask=True)
+#     debugNode = BulletDebugNode('Debug')
+#     debugNode.showWireframe(True)
+#     debugNode.showConstraints(True)
+#     debugNode.showBoundingBoxes(False)
+#     debugNode.showNormals(False)
+#     bullcldrnp = base.render.attachNewNode("bulletcollider")
+#     debugNP = bullcldrnp.attachNewNode(debugNode)
+#     debugNP.show()
+#     regrasp_planner.bulletworldhp.setDebugNode(debugNP.node())
+#     taskMgr.add(updateworld, "updateworld", extraArgs=[regrasp_planner.bulletworldhp], appendTask=True)
 
-    myTask = taskMgr.doMethodLater(0.1, myFunction, 'tickTask', extraArgs=[Task.Task(myFunction), poseTrajectory])
+#     myTask = taskMgr.doMethodLater(0.1, myFunction, 'tickTask', extraArgs=[Task.Task(myFunction), poseTrajectory])
 
-    base.run()
+#     base.run()
