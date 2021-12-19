@@ -173,27 +173,6 @@ class dexterousManipulationGraph:
             pos_path.append(next_pos)
         return pos_path
 
-def PandaPosMax_t_PosMat(panda_posmtx):
-    """The panda pose matrix needs to be scaled and transposed to be a normal pose matrix form."""
-
-    mat = np.array([[panda_posmtx[0][0],panda_posmtx[1][0],panda_posmtx[2][0],panda_posmtx[3][0]], \
-                    [panda_posmtx[0][1],panda_posmtx[1][1],panda_posmtx[2][1],panda_posmtx[3][1]], \
-                    [panda_posmtx[0][2],panda_posmtx[1][2],panda_posmtx[2][2],panda_posmtx[3][2]], \
-                    [0.0,0.0,0.0,1.0]])
-
-    # if not isRotationMatrix(mat[:3,:3]):
-    #     raise Exception("The rotation part is not a rotation matrix!!")
-
-    return mat
-
-def PosMat_t_PandaPosMax(posmtx):
-
-    pose = Mat4( posmtx[0][0],posmtx[1][0],posmtx[2][0],0.0, \
-                 posmtx[0][1],posmtx[1][1],posmtx[2][1],0.0, \
-                 posmtx[0][2],posmtx[1][2],posmtx[2][2],0.0, \
-                 posmtx[0][3],posmtx[1][3],posmtx[2][3],1.0)
-
-    return pose
 
 class ff_regrasp_planner(object):
 
@@ -276,7 +255,7 @@ class ff_regrasp_planner(object):
                             graspOrder.append(currentIndexOfGrasps)
                             sql = "INSERT INTO grasps(idgrasp, idanglerange, pose) \
                                 VALUES('%d', '%d', '%s')" % \
-                                (currentIndexOfGrasps, currentIndexOfAngleRange, dc.mat4ToStr(PosMat_t_PandaPosMax(grasp)))
+                                (currentIndexOfGrasps, currentIndexOfAngleRange, dc.mat4ToStr(pg.cvtMat4np4(grasp)))
                             gdb.execute(sql)
                             currentIndexOfGrasps += 1
 
@@ -336,7 +315,7 @@ class ff_regrasp_planner(object):
             sql = "SELECT * FROM dmgs WHERE dmgs.idobject = '%d'" % objectId
             dmgresult = gdb.execute(sql)
             for dmgid, _, placementpose_str, _, planevector_str in dmgresult:
-                placementid = self.getPlacementId(PandaPosMax_t_PosMat(dc.strToMat4(placementpose_str)))
+                placementid = self.getPlacementId(pg.mat4ToNp(dc.strToMat4(placementpose_str)))
 
                 # search angle ranges
                 sql = "SELECT idanglerange, grasporder FROM angleranges WHERE iddmg = %d" % dmgid
@@ -350,7 +329,7 @@ class ff_regrasp_planner(object):
                     for g in range(len(grasporder)):
                         sql = "SELECT pose FROM grasps WHERE idgrasp = %d" % grasporder[g]
                         graspresult = gdb.execute(sql)
-                        newanglerange.append(PandaPosMax_t_PosMat(dc.strToMat4(graspresult[0][0])))
+                        newanglerange.append(pg.mat4ToNp(dc.strToMat4(graspresult[0][0])))
                     anglerange_list.append(newanglerange)
 
                 # search for edges
@@ -421,7 +400,7 @@ class ff_regrasp_planner(object):
         self.hand.setJawwidth(jawwidth)
         self.hand.reparentTo(base.render)
         for i, t in enumerate(trajectory):
-            self.hand.setMat(pandanpmat4 = PosMat_t_PandaPosMax(t))
+            self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(t))
             # add hand model to bulletworld
             hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
             result0 = self.bulletworldhp.contactTest(hndbullnode)
@@ -737,7 +716,7 @@ class ff_regrasp_planner(object):
         for i in range(len(angleMask)):
             for j in range(len(angleMask[i])):
                 firstOfAngleRange, endOfAngleRange = self.getSideOfAngleRange(angleMask[i][j])
-                newAngleRange = [PandaPosMax_t_PosMat(grasp) for indx, grasp in enumerate(angleSet[i]) if angleMask[i][j][indx]]
+                newAngleRange = [pg.mat4ToNp(grasp) for indx, grasp in enumerate(angleSet[i]) if angleMask[i][j][indx]]
 
                 if endOfAngleRange < firstOfAngleRange:
                     newAngleRange = self.rotate(newAngleRange, endOfAngleRange + 1)
@@ -786,7 +765,7 @@ class ff_regrasp_planner(object):
     def getPlacementId(self, placement):
         # get the proper placement id
         currentPlacementDirection = self.getGroundDirection(placement)
-        placementDirections = [self.getGroundDirection(PandaPosMax_t_PosMat(g)) for g in self.tpsmat4s]
+        placementDirections = [self.getGroundDirection(pg.mat4ToNp(g)) for g in self.tpsmat4s]
 
         diff = 2.0 
         closest_placementid = None
@@ -805,22 +784,22 @@ class ff_regrasp_planner(object):
 
         # get finger direction of init grasp
         tmphand = fetch_grippernm.Fetch_gripperNM(hndcolor=[1, 0, 0, 0])
-        tmphand.setMat(pandanpmat4= PosMat_t_PandaPosMax(init_grasp))
+        tmphand.setMat(pandanpmat4= pg.cvtMat4np4(init_grasp))
         tmphand.setJawwidth(50)
         c1, c0 = tmphand.getFingerTips()
-        c0 = self.getPointFromPose(PosMat_t_PandaPosMax(init_grasp), c0)
-        c1 = self.getPointFromPose(PosMat_t_PandaPosMax(init_grasp), c1)
+        c0 = self.getPointFromPose(pg.cvtMat4np4(init_grasp), c0)
+        c1 = self.getPointFromPose(pg.cvtMat4np4(init_grasp), c1)
         init_grasp_direction = np.array([c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]])
         init_grasp_direction = init_grasp_direction / np.linalg.norm(init_grasp_direction)
         init_grasp_center = np.array([c1[0] + c0[0], c1[1] + c0[1], c1[2] + c0[2]]) / 2
         init_grasp_plane = np.concatenate((init_grasp_center, init_grasp_direction))
 
         # get finger firection of target grasp
-        tmphand.setMat(pandanpmat4= PosMat_t_PandaPosMax(target_grasp))
+        tmphand.setMat(pandanpmat4= pg.cvtMat4np4(target_grasp))
         tmphand.setJawwidth(50)
         c1, c0 = tmphand.getFingerTips()
-        c0 = self.getPointFromPose(PosMat_t_PandaPosMax(target_grasp), c0)
-        c1 = self.getPointFromPose(PosMat_t_PandaPosMax(target_grasp), c1)
+        c0 = self.getPointFromPose(pg.cvtMat4np4(target_grasp), c0)
+        c1 = self.getPointFromPose(pg.cvtMat4np4(target_grasp), c1)
         target_grasp_direction = np.array([c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]])
         target_grasp_direction = target_grasp_direction / np.linalg.norm(target_grasp_direction)
         target_grasp_center = np.array([c1[0] + c0[0], c1[1] + c0[1], c1[2] + c0[2]]) / 2
@@ -886,7 +865,7 @@ class ff_regrasp_planner(object):
 
         # get the matching object placement pose
         placementid = self.getPlacementId(_placement)
-        placement = PandaPosMax_t_PosMat(self.tpsmat4s[placementid])
+        placement = pg.mat4ToNp(self.tpsmat4s[placementid])
 
         # get the init grasp and target grasp in table frame
         init_grasp = placement.dot(_init_grasp)
@@ -969,15 +948,15 @@ class ff_regrasp_planner(object):
 #     startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
 #     goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
 #     placementPose = regrasp_planner.getPlacement(placementId)
-#     inv_placementPose = np.linalg.inv(PandaPosMax_t_PosMat(placementPose))
+#     inv_placementPose = np.linalg.inv(pg.mat4ToNp(placementPose))
 #     # pass the init grasp and target grasp in object frame
 #     # pass the object placement in the table frame
-#     grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 0.08, PandaPosMax_t_PosMat(placementPose), base)
+#     grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(pg.mat4ToNp(startPose_panda)), inv_placementPose.dot(pg.mat4ToNp(goalPose_panda)), 0.08, pg.mat4ToNp(placementPose), base)
 
 
 #     poseTrajectory = []
 #     for g in range(len(grasp_trajectory) - 1):
-#         trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]))
+#         trajectory = regrasp_planner.getLinearPoseTrajectory(pg.mat4ToNp(placementPose).dot(grasp_trajectory[g]), pg.mat4ToNp(placementPose).dot(grasp_trajectory[g+1]))
 #         poseTrajectory.extend(trajectory)
 
 #     ################ following code is used to demo ####################################################
@@ -1017,7 +996,7 @@ class ff_regrasp_planner(object):
 #         if counter > len(poseTrajectory) - 1:
 #             return task.done
 
-#         currenthnd.setMat(pandanpmat4 = PosMat_t_PandaPosMax(poseTrajectory[counter]))
+#         currenthnd.setMat(pandanpmat4 = pg.cvtMat4np4(poseTrajectory[counter]))
 #         counter += 1
 #         return task.again
 

@@ -4,7 +4,7 @@ import os
 from panda3d.bullet import BulletWorld
 from panda3d.bullet import BulletDebugNode
 from panda3d.core import *
-from ffregrasp import ff_regrasp_planner, PandaPosMax_t_PosMat, PosMat_t_PandaPosMax
+from ffregrasp import ff_regrasp_planner
 from manipulation.grip.fetch_gripper import fetch_grippernm
 from database import dbaccess as db
 import pandaplotutils.pandactrl as pandactrl
@@ -30,12 +30,12 @@ if __name__ == '__main__':
     startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
     goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
     placementPose = regrasp_planner.getPlacement(placementId)
-    inv_placementPose = np.linalg.inv(PandaPosMax_t_PosMat(placementPose))
+    inv_placementPose = np.linalg.inv(pg.mat4ToNp(placementPose))
     
     # pass the init grasp and target grasp in object frame
     # pass the object placement in the table frame
-    grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), 
-                inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 80, PandaPosMax_t_PosMat(placementPose), base)
+    grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(pg.mat4ToNp(startPose_panda)), 
+                inv_placementPose.dot(pg.mat4ToNp(goalPose_panda)), 80, pg.mat4ToNp(placementPose), base)
 
     if grasp_trajectory == None:
         print("no path between init grasp to target grasp")
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     poseTrajectory = []
     print("len of grasp = ", len(grasp_trajectory))
     for g in range(len(grasp_trajectory) - 1):
-        trajectory = regrasp_planner.getLinearPoseTrajectory(PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g]), PandaPosMax_t_PosMat(placementPose).dot(grasp_trajectory[g+1]))
+        trajectory = regrasp_planner.getLinearPoseTrajectory(pg.mat4ToNp(placementPose).dot(grasp_trajectory[g]), pg.mat4ToNp(placementPose).dot(grasp_trajectory[g+1]))
         poseTrajectory.extend(trajectory)
 
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         if counter > len(poseTrajectory) - 1:
             return task.done
 
-        currenthnd.setMat(pandanpmat4 = PosMat_t_PandaPosMax(poseTrajectory[counter]))
+        currenthnd.setMat(pandanpmat4 = pg.cvtMat4np4(poseTrajectory[counter]))
         counter += 1
         return task.again
 
