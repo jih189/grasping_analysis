@@ -24,7 +24,7 @@ from database import dbaccess as db
 
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
-from scipy.spatial import Voronoi, voronoi_plot_2d, Delaunay
+from scipy.spatial import Voronoi, voronoi_plot_2d
 from scipy.special import softmax
 
 from trimesh import geometry as trigeom
@@ -176,9 +176,9 @@ class dexterousManipulationGraph:
 def PandaPosMax_t_PosMat(panda_posmtx):
     """The panda pose matrix needs to be scaled and transposed to be a normal pose matrix form."""
 
-    mat = np.array([[panda_posmtx[0][0],panda_posmtx[1][0],panda_posmtx[2][0],panda_posmtx[3][0]/1000.0], \
-                    [panda_posmtx[0][1],panda_posmtx[1][1],panda_posmtx[2][1],panda_posmtx[3][1]/1000.0], \
-                    [panda_posmtx[0][2],panda_posmtx[1][2],panda_posmtx[2][2],panda_posmtx[3][2]/1000.0], \
+    mat = np.array([[panda_posmtx[0][0],panda_posmtx[1][0],panda_posmtx[2][0],panda_posmtx[3][0]], \
+                    [panda_posmtx[0][1],panda_posmtx[1][1],panda_posmtx[2][1],panda_posmtx[3][1]], \
+                    [panda_posmtx[0][2],panda_posmtx[1][2],panda_posmtx[2][2],panda_posmtx[3][2]], \
                     [0.0,0.0,0.0,1.0]])
 
     # if not isRotationMatrix(mat[:3,:3]):
@@ -187,13 +187,11 @@ def PandaPosMax_t_PosMat(panda_posmtx):
     return mat
 
 def PosMat_t_PandaPosMax(posmtx):
-    # if not isRotationMatrix(posmtx[:3,:3]):
-    #     raise Exception("The rotation part is not a rotation matrix!!")
-    # convert pose mat to panda pose mat
+
     pose = Mat4( posmtx[0][0],posmtx[1][0],posmtx[2][0],0.0, \
                  posmtx[0][1],posmtx[1][1],posmtx[2][1],0.0, \
                  posmtx[0][2],posmtx[1][2],posmtx[2][2],0.0, \
-                 posmtx[0][3] * 1000.0,posmtx[1][3] * 1000.0,posmtx[2][3] * 1000.0,1.0)
+                 posmtx[0][3],posmtx[1][3],posmtx[2][3],1.0)
 
     return pose
 
@@ -401,7 +399,7 @@ class ff_regrasp_planner(object):
         rotation = R.from_dcm(np.dot(np.transpose(start_grasp[:3,:3]), goal_grasp[:3,:3]))
         rotation_rotvec = rotation.as_rotvec()
         translation = goal_grasp[:3,3] - start_grasp[:3,3]
-        numberOfStep = max(int(np.linalg.norm(rotation_rotvec) / 0.05) + int(np.linalg.norm(translation) / 0.005), 1)
+        numberOfStep = max(int(np.linalg.norm(rotation_rotvec) / 0.05) + int(np.linalg.norm(translation) / 5), 1)
         
         # get the rotation step
         rotationStep = R.from_rotvec( rotation_rotvec / numberOfStep).as_dcm()
@@ -419,7 +417,8 @@ class ff_regrasp_planner(object):
         result = True
         # collisionId = 0
         trajectory = self.getLinearPoseTrajectory(startGrasp, goalGrasp)
-        self.hand.setJawwidth(jawwidth * 1000.0)
+        # self.hand.setJawwidth(jawwidth * 1000.0)
+        self.hand.setJawwidth(jawwidth)
         self.hand.reparentTo(base.render)
         for i, t in enumerate(trajectory):
             self.hand.setMat(pandanpmat4 = PosMat_t_PandaPosMax(t))
@@ -918,11 +917,6 @@ class ff_regrasp_planner(object):
             self.cleanRenderedObject(base)
             print("can't find angle range index of target grasps")
             return None
-
-        print("angle range of init grasp ", angleRange_idx_init_grasp)
-        print(dmg.Graph.has_node(angleRange_idx_init_grasp))
-        print("angle range of target grasp ", angleRange_idx_target_grasp)
-        print(dmg.Graph.has_node(angleRange_idx_target_grasp))
 
         dmg.insert_init_grasp_2_DMG(angleRange_idx_init_grasp, init_grasp, init_connect_grasp)
         dmg.insert_end_grasp_2_DMG(angleRange_idx_target_grasp, target_grasp, target_connect_grasp)

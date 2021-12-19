@@ -1,7 +1,9 @@
 #!/user/bin/python
-
+import sys
 import os
 import numpy as np
+
+from direct.showbase import DirectObject
 
 from manipulation.grip.fetch_gripper import fetch_grippernm
 from panda3d.bullet import BulletWorld
@@ -28,6 +30,8 @@ import random
 import networkx as nx
 import math
 from scipy.spatial import KDTree
+
+from direct.task import Task
 
 # fibonacci sphere points generator
 def fibonacci_sphere(samples=100):
@@ -332,7 +336,6 @@ class StablePickupPlanner(object):
         objecttemp.setMat(pg.cvtMat4np4(placementpose))
         objecttemp.reparentTo(base.render)
 
-        # self.npnodeobj.showTightBounds()
     
     def getPlaneWithTwoPoints(self, p1, p0):
         """
@@ -602,8 +605,66 @@ class StablePickupPlanner(object):
 
 
 
+class DemoHelper(DirectObject.DirectObject):
+    def __init__(self, objpath, handpkg, _base):
+        objtrimesh=trimesh.load_mesh(objpath)
+        geom = pg.packpandageom(objtrimesh.vertices,
+                                objtrimesh.face_normals,
+                                objtrimesh.faces)
 
+        node = GeomNode('obj')
+        node.addGeom(geom)
 
+        self.demoObj = NodePath('obj')
+        self.demoObj.attachNewNode(node)
+        self.demoObj.setColor(Vec4(.7,0.3,0,0.2))
+        self.demoObj.setTransparency(TransparencyAttrib.MAlpha)
+
+        self.handpkg = handpkg
+        self.handname = handpkg.getHandName()
+        self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.5])
+
+        self.base = _base
+
+        self.eventQueue = []
+
+        self.counter = 0
+        self.eventCounter = 0
+        self.accept('w', self.testevent)
+
+    def setObjPose(self, placementPose):
+        """
+        Given object pose in numpy format
+        """
+        self.demoObj.setMat(pg.cvtMat4np4(placementPose))
+        self.demoObj.reparentTo(self.base.render)
+
+    def setHandPose(self, handPose, jawwidth):
+
+        self.hand.setJawwidth(jawwidth)
+        self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(handPose))
+        self.hand.reparentTo(self.base.render)
+
+    def addEvent(self, action, motion):
+        self.eventQueue.append([action, motion])
+
+    def fingerGaiting(self, task, gripper_trajectory):
+        if self.eventCounter > len(gripper_trajectory) - 1:
+            return task.done
+        self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(gripper_trajectory[self.eventCounter]))
+        self.eventCounter += 1
+        return task.again
+
+    def testevent(self):
+        if self.counter == len(self.eventQueue):
+            sys.exit()
+        # execute the event according to the counter
+        action, trajectory = self.eventQueue[self.counter]
+        if action == "fingerGait":
+            self.eventCounter = 0
+            taskMgr.doMethodLater(0.1, self.fingerGaiting, 'fingerGaitTask', extraArgs=[Task.Task(self.fingerGaiting), trajectory])
+        print("counter", self.counter)
+        self.counter += 1
 
 
 if __name__ == '__main__':
@@ -621,6 +682,9 @@ if __name__ == '__main__':
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
+
+    # initialize a demo helper
+    demoHelper = DemoHelper(objpath, handpkg, base)
 
     regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
 
@@ -641,46 +705,37 @@ if __name__ == '__main__':
     pivotActionSequence = pickup_planner.getPivotPath(initial_placement, placedownPose)
     # [placementid1, placementid2, list of pivot grasps, pivot corner point]
 
-    # pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
-    # pickup_planner.showPickUp(base, placedownPose, input_grasp[0], input_grasp[1])
-    # pickup_planner.showPickUp(base, initial_placement, input_grasp[0], input_grasp[1])
-
-    # show initial grasp with initial placement
-    
-
     currentgrasp = input_grasp
     currentplacement = initial_placement
-
-    def scalePose(pose):
-        result = np.copy(pose)
-        result[0][3] = result[0][3] / 1000.0
-        result[1][3] = result[1][3] / 1000.0
-        result[2][3] = result[2][3] / 1000.0
-        return result
 
     for action in pivotActionSequence:
         placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
         placement1pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid1))
         placement2pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid2))
 
+        # move to pivot grasp for pivoting
         grasp_trajectory = None
 
-        counter = 2
-
         for pgl in pivotGraspslist:
-
-            counter -= 1
-
             pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
-
-            grasp_trajectory = regrasp_planner.getTrajectory(scalePose(currentgrasp[0]), scalePose(pg.mat4ToNp(pivotgrasp)), pivotgraspJawwidth / 1000.0, scalePose(currentplacement), base)
+            grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
             if not grasp_trajectory == None:
                 break
-            if counter == 0:
-                break
 
-        print(grasp_trajectory)
+        # execute grasp trajectory
+        poseTrajectory = []
+        for g in range(len(grasp_trajectory) - 1):
+            trajectory = regrasp_planner.getLinearPoseTrajectory(placement1pose.dot(grasp_trajectory[g]), placement1pose.dot(grasp_trajectory[g+1]))
+            poseTrajectory.extend(trajectory)
 
+        print("pose trajectory length = ", len(poseTrajectory))
+
+
+        demoHelper.addEvent("fingerGait", poseTrajectory)
+
+
+    demoHelper.setObjPose(initial_placement)
+    demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
 
     def updateworld(world, task):
         world.doPhysics(globalClock.getDt())
@@ -701,6 +756,5 @@ if __name__ == '__main__':
     axis = loader.loadModel('zup-axis.egg')
     axis.setScale(10)
     axis.reparentTo(base.render)
-
 
     base.run()

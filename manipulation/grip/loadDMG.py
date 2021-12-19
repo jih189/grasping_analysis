@@ -24,8 +24,8 @@ if __name__ == '__main__':
     regrasp_planner.loadDB()
 
     placementId = 2
-    startGraspId = 12
-    goalGraspId = 10
+    startGraspId = 2
+    goalGraspId = 40
 
     startPose_panda, startJawwidth_panda = regrasp_planner.getGrasp(placementId, startGraspId)
     goalPose_panda, goalJawwidth_panda = regrasp_planner.getGrasp(placementId, goalGraspId)
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     # pass the init grasp and target grasp in object frame
     # pass the object placement in the table frame
     grasp_trajectory = regrasp_planner.getTrajectory(inv_placementPose.dot(PandaPosMax_t_PosMat(startPose_panda)), 
-                inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 0.08, PandaPosMax_t_PosMat(placementPose), base)
+                inv_placementPose.dot(PandaPosMax_t_PosMat(goalPose_panda)), 80, PandaPosMax_t_PosMat(placementPose), base)
 
     if grasp_trajectory == None:
         print("no path between init grasp to target grasp")
