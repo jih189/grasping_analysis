@@ -258,7 +258,30 @@ class StablePickupPlanner(object):
         placedownpose.setCell(3,1,placedownpose.getCell(3,1) + rotationPoint[1])
         placedownpose.setCell(3,2,placedownpose.getCell(3,2) + rotationPoint[2])
 
-        return pg.mat4ToNp(placedownpose)
+        placedownpose_np = pg.mat4ToNp(placedownpose)
+
+        result = [placedownpose_np.copy()]
+
+        # calculate the rotate angle
+        r = R.from_dcm((np.linalg.inv(placedownpose_np).dot(liftupPose_t))[:3, :3]).as_rotvec()
+        rotateAngle = np.linalg.norm(r)
+        rotateAxis = r / rotateAngle
+                
+        stepNum = 30
+        stepRotation = rotateAngle / stepNum * rotateAxis
+
+        shiftmatrix = np.identity(4)
+        rotateMatrix = np.identity(4)
+        shiftmatrix[:3, 3] = rotationPoint
+        
+        for i in range(stepNum):
+            rotateMatrix[:3, :3] = R.from_rotvec(stepRotation * i).as_dcm()
+            result.append(shiftmatrix.dot(rotateMatrix).dot(np.linalg.inv(shiftmatrix)).dot(placedownpose_np))
+        
+        result.append(liftupPose_t)
+
+
+        return placedownpose_np, result
 
     def getPrePickupPose(self, grasppose, jawwidth):
         '''
@@ -760,7 +783,7 @@ if __name__ == '__main__':
 
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
 
-    placedownPose = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
+    placedownPose, liftuptrajectory = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
 
     pickup_planner.createPlacementGraph()
 
@@ -769,7 +792,9 @@ if __name__ == '__main__':
     # [placementid1, placementid2, list of pivot grasps, pivot corner point]
 
     currentgrasp = input_grasp
-    currentplacement = initial_placement
+    currentplacement = initial_placement.copy()
+
+    # execute a sequence of pivoting actions
 
     for action in pivotActionSequence:
         placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
@@ -779,24 +804,48 @@ if __name__ == '__main__':
 
         # finger gaiting
         grasp_trajectory = None
+        next_grasp = None
+        next_jawwidth = None
 
         for pgl in pivotGraspslist:
             pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
             grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
             if not grasp_trajectory == None:
+                next_grasp = pg.mat4ToNp(pivotgrasp)
+                next_jawwidth = pivotgraspJawwidth
                 break
 
         poseTrajectory = []
         for g in range(len(grasp_trajectory) - 1):
-            poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(placement1pose.dot(grasp_trajectory[g]), placement1pose.dot(grasp_trajectory[g+1])))
+            poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(currentplacement.dot(grasp_trajectory[g]), currentplacement.dot(grasp_trajectory[g+1])))
 
         demoHelper.addEvent("fingerGait", poseTrajectory)
 
         # pivoting
-        pivotTrajectory = pickup_planner.getPivotTrajectory(placement1pose, placement2pose, pivotCornerPoint)
+        pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, pivotCornerPoint)]
         demoHelper.addEvent("pivot", pivotTrajectory)
 
+        currentgrasp = [next_grasp, next_jawwidth]
+        currentplacement = pivotTrajectory[-1]
 
+    # lift up the object
+    # move back to the original grasp
+    grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], input_grasp[0], input_grasp[1], currentplacement, base)
+
+    poseTrajectory = []
+    for g in range(len(grasp_trajectory) - 1):
+        poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(currentplacement.dot(grasp_trajectory[g]), currentplacement.dot(grasp_trajectory[g+1])))
+
+    demoHelper.addEvent("fingerGait", poseTrajectory)
+
+    # lift up
+    liftuptrajectory = [currentplacement.dot(np.linalg.inv(placedownPose)).dot(p) for p in liftuptrajectory]
+    demoHelper.addEvent("pivot", liftuptrajectory)
+
+
+    #####################################################################################
+    #                                  show the demo                                    #
+    #####################################################################################
 
     demoHelper.setObjPose(initial_placement)
     demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])

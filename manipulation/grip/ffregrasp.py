@@ -447,6 +447,9 @@ class ff_regrasp_planner(object):
             self.star = None
     
     def getLinearPoseTrajectory(self, startPose, goalPose):
+        """
+        There is no collsion involve.
+        """
         rotationStep, translationStep, numberOfStep = self.getStep(startPose, goalPose)
 
         poseTrajectory = []
