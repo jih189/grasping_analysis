@@ -407,7 +407,6 @@ class ff_regrasp_planner(object):
             result1 = self.bulletObj.contactTest(hndbullnode)
             if result0.getNumContacts() or result1.getNumContacts():
                 result = False
-                # collisionId = i
                 break
 
         return result#, trajectory[collisionId]

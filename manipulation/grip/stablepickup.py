@@ -30,6 +30,7 @@ import random
 import networkx as nx
 import math
 from scipy.spatial import KDTree
+from scipy.spatial.transform import Rotation as R
 
 from direct.task import Task
 
@@ -491,6 +492,51 @@ class StablePickupPlanner(object):
 
         # return pg.cvtMat4np4(pose)
 
+    def getPivotTrajectory(self, placementpose1, placementpose2, pivotPoint):
+        """
+        Given the beginning placement and target placement, we use the pivotPoint to find the final placement after pivoting.
+        placementpose1: first placement pose
+        placementpose2: second placement pose
+        the pivot point in the object frame
+        """
+
+        # calculate the pivoted pose
+        p1 = rm.transformmat4(placementpose1, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose1, pivotPoint[0])[:3]
+
+        cornerpoint1 = np.identity(4)
+        cornerpoint1[:3, :3] = np.vstack([p1, np.dot(rm.hat(p1), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
+        cornerpoint1[:3, 3] = rm.transformmat4(placementpose1, pivotPoint[0])[:3]
+
+        p2 = rm.transformmat4(placementpose2, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose2, pivotPoint[0])[:3]
+
+        cornerpoint2 = np.identity(4)
+        cornerpoint2[:3, :3] = np.vstack([p2, np.dot(rm.hat(p2), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
+        cornerpoint2[:3, 3] = rm.transformmat4(placementpose2, pivotPoint[0])[:3]
+
+        pivotedPlacement = cornerpoint1.dot(np.linalg.inv(cornerpoint2)).dot(placementpose2)
+
+        result = [placement1pose.copy()]
+
+        # calculate the rotate angle
+        r = R.from_dcm((np.linalg.inv(placementpose1).dot(pivotedPlacement))[:3, :3]).as_rotvec()
+        rotateAngle = np.linalg.norm(r)
+        rotateAxis = r / rotateAngle
+                
+        stepNum = 30
+        stepRotation = rotateAngle / stepNum * rotateAxis
+
+        shiftmatrix = np.identity(4)
+        rotateMatrix = np.identity(4)
+        shiftmatrix[:3, 3] = pivotPoint[0]
+        
+        for i in range(stepNum):
+            rotateMatrix[:3, :3] = R.from_rotvec(stepRotation * i).as_dcm()
+            result.append(placementpose1.dot(shiftmatrix).dot(rotateMatrix).dot(np.linalg.inv(shiftmatrix)))
+        
+        result.append(pivotedPlacement)
+
+        return result
+
     def showPivot(self, pivotaction, base):
         """
         this function will visualize the pivot action
@@ -654,6 +700,20 @@ class DemoHelper(DirectObject.DirectObject):
         self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(gripper_trajectory[self.eventCounter]))
         self.eventCounter += 1
         return task.again
+    
+    def pivoting(self, task, pivot_trajectory):
+        if self.eventCounter > len(pivot_trajectory) - 1:
+            return task.done
+
+        # get pose of the hand
+        original_object_pose = pg.mat4ToNp(self.demoObj.getMat())
+        original_hand_pose = pg.mat4ToNp(self.hand.getMat())
+        hand_pose_in_obj_frame = np.linalg.inv(original_object_pose).dot(original_hand_pose)
+
+        self.demoObj.setMat(pg.cvtMat4np4(pivot_trajectory[self.eventCounter]))
+        self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(pivot_trajectory[self.eventCounter].dot(hand_pose_in_obj_frame)))
+        self.eventCounter += 1
+        return task.again
 
     def testevent(self):
         if self.counter == len(self.eventQueue):
@@ -663,6 +723,9 @@ class DemoHelper(DirectObject.DirectObject):
         if action == "fingerGait":
             self.eventCounter = 0
             taskMgr.doMethodLater(0.1, self.fingerGaiting, 'fingerGaitTask', extraArgs=[Task.Task(self.fingerGaiting), trajectory])
+        elif action == "pivot":
+            self.eventCounter = 0
+            taskMgr.doMethodLater(0.1, self.pivoting, 'pivotTask', extraArgs=[Task.Task(self.pivoting), trajectory])
         print("counter", self.counter)
         self.counter += 1
 
@@ -710,10 +773,11 @@ if __name__ == '__main__':
 
     for action in pivotActionSequence:
         placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
+
         placement1pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid1))
         placement2pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid2))
 
-        # move to pivot grasp for pivoting
+        # finger gaiting
         grasp_trajectory = None
 
         for pgl in pivotGraspslist:
@@ -722,16 +786,16 @@ if __name__ == '__main__':
             if not grasp_trajectory == None:
                 break
 
-        # execute grasp trajectory
         poseTrajectory = []
         for g in range(len(grasp_trajectory) - 1):
-            trajectory = regrasp_planner.getLinearPoseTrajectory(placement1pose.dot(grasp_trajectory[g]), placement1pose.dot(grasp_trajectory[g+1]))
-            poseTrajectory.extend(trajectory)
-
-        print("pose trajectory length = ", len(poseTrajectory))
-
+            poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(placement1pose.dot(grasp_trajectory[g]), placement1pose.dot(grasp_trajectory[g+1])))
 
         demoHelper.addEvent("fingerGait", poseTrajectory)
+
+        # pivoting
+        pivotTrajectory = pickup_planner.getPivotTrajectory(placement1pose, placement2pose, pivotCornerPoint)
+        demoHelper.addEvent("pivot", pivotTrajectory)
+
 
 
     demoHelper.setObjPose(initial_placement)
