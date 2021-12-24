@@ -136,9 +136,9 @@ class StablePickupPlanner(object):
         generate a random initial grasp and placement in numpy format
          
         """
-        # random_index = random.randint(0, len(self.freegripid))
-        # random_index = 219
-        random_index = 347
+        random_index = random.randint(0, len(self.freegripid))
+        random_index = 219
+        # random_index = 347
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -149,9 +149,9 @@ class StablePickupPlanner(object):
         if len(result) == 0:
             print("there is no way to place the object with current grasp")
             return None, None
-        # random_placement_index = random.randint(0, len(result) - 1)
-        # random_placement_index = 1
-        random_placement_index = 0
+        random_placement_index = random.randint(0, len(result) - 1)
+        random_placement_index = 1
+        # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
