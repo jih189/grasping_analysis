@@ -959,8 +959,20 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         else:
             return False
 
+    def point_on_line(p1, p2, p3):
+        l2 = np.sum((p1-p2)**2)
+        if l2 == 0:
+            raise Exception('p1 and p2 are the same points')
+
+        #if you need the point to project on line extention connecting p1 and p2
+        t = np.sum((p3 - p1) * (p2 - p1)) / l2
+
+        return p1 + t * (p2 - p1)
+
+
     facetp = []
     rotateMatrix = trigeom.align_vectors(np.array(direction), [0,0,1])
+    rotateMatrixInv = np.linalg.inv(rotateMatrix)
 
     # get mass center on 2d
     mass_center_2d = Point(rm.transformmat4(rotateMatrix, mass_center)[:2])
@@ -1052,14 +1064,14 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
                 pivotpoints.append([])
 
             # not a relative stable placement
-            pivotpoints[-1].append([rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint])
+            pivotpoints[-1].append([rm.transformmat4(rotateMatrixInv, [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint])
             if p == len(verts2d) - 2 and not isFirstPlacementStable:
                 pivotpoints[-1] += pivotpoints[0]
                 pivotpoints.pop(0)
             continue
 
         # for next pivot group
-        pivotpoints.append([[rm.transformmat4(np.linalg.inv(rotateMatrix), [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint]])
+        pivotpoints.append([[rm.transformmat4(rotateMatrixInv, [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint]])
 
         if p == len(verts2d) - 2 and not isFirstPlacementStable:
             pivotpoints[-1] += pivotpoints[0]
@@ -1069,7 +1081,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
          
         ffdirection = ffdirection / np.linalg.norm(ffdirection)
 
-        ffdirection = rm.transformmat4(np.linalg.inv(rotateMatrix), ffdirection)[:3]
+        ffdirection = rm.transformmat4(rotateMatrixInv, ffdirection)[:3]
         
         ffdirections.append(ffdirection)
 
@@ -1081,7 +1093,17 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         rotplacement[2,3] = heights[f]
         ffplacements.append(rotplacement)
 
-    return ffplacements, ffdirections, pivotpoints
+    pivotPlacements = []
+    for p in pivotpoints:
+        pivotPlacements.append([])
+        if len(p) > 1:
+            for t in range(len(p) - 1):
+                unstableffplacement2d = point_on_line(rm.transformmat4(rotateMatrix, p[t][0])[:2], rm.transformmat4(rotateMatrix, p[t+1][0])[:2], np.array([mass_center_2d.x, mass_center_2d.y])) - np.array([mass_center_2d.x, mass_center_2d.y])
+                unstableffplacement = rm.transformmat4(rotateMatrixInv, [unstableffplacement2d[0], unstableffplacement2d[1], 0])[:3]
+                unstableffplacementpose = trigeom.align_vectors(unstableffplacement, [0,0,-1])
+                unstableffplacementpose[2, 3] = np.linalg.norm(unstableffplacement2d)
+                pivotPlacements[-1].append(unstableffplacementpose)
+    return ffplacements, ffdirections, pivotpoints, pivotPlacements
 
 
 

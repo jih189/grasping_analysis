@@ -72,9 +72,6 @@ class StablePickupPlanner(object):
         # for dbaccess
         self.dbobjname = os.path.splitext(os.path.basename(objpath))[0]
 
-        # placement graph
-        self.PlacementG = nx.Graph()
-
         # use two bulletworld, one for the ray, the other for the tabletop
         self.bulletworldray = BulletWorld()
         self.bulletworldhp = BulletWorld()
@@ -140,7 +137,8 @@ class StablePickupPlanner(object):
          
         """
         # random_index = random.randint(0, len(self.freegripid))
-        random_index = 173
+        # random_index = 219
+        random_index = 347
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -152,8 +150,9 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         # random_placement_index = random.randint(0, len(result) - 1)
-        # print("check random ", random_placement_index)
-        random_placement_index = 1
+        # random_placement_index = 1
+        random_placement_index = 0
+        print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
 
@@ -429,7 +428,7 @@ class StablePickupPlanner(object):
 
             # ffdirections is the placement direction in the object frame
             # rotate corners are the rotate corners in the object frame
-            _, ffdirections, rotateCornersInfo = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
+            _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
             ffdirectionsMat = np.stack(ffdirections)
 
             manipulationPlaneXAxisMat = (np.array([
@@ -493,8 +492,10 @@ class StablePickupPlanner(object):
                         if not result1.getNumContacts() and not result2.getNumContacts():
                             validPivotGraspid.append(graspid)
 
+                    # need to find the placements during rotation
 
-                    placement2placement.append([placementpose1, placementpose2, validPivotGraspid, (rotateCorners[l][0], fingerdirection)])
+
+                    placement2placement.append([placementpose1, placementpose2, validPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
 
         return placement2placement
 
@@ -520,7 +521,8 @@ class StablePickupPlanner(object):
         Given the beginning placement and target placement, we use the pivotPoint to find the final placement after pivoting.
         placementpose1: first placement pose
         placementpose2: second placement pose
-        the pivot point in the object frame
+        the pivot point list in the object frame
+        where pivotPoint[0] is a list of pivot poing, while pivotPoint[1] is the rotation axis
         """
 
         # calculate the pivoted pose
@@ -538,7 +540,8 @@ class StablePickupPlanner(object):
 
         pivotedPlacement = cornerpoint1.dot(np.linalg.inv(cornerpoint2)).dot(placementpose2)
 
-        result = [placement1pose.copy()]
+        # result = [placement1pose.copy()]
+        result = []
 
         # calculate the rotate angle
         r = R.from_dcm((np.linalg.inv(placementpose1).dot(pivotedPlacement))[:3, :3]).as_rotvec()
@@ -651,7 +654,8 @@ class StablePickupPlanner(object):
         create a pivoting graph
         '''
 
-        self.Graph = nx.Graph()
+        # self.Graph = nx.Graph()
+        self.Graph = nx.DiGraph()
 
         fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
 
@@ -661,6 +665,8 @@ class StablePickupPlanner(object):
         # build the graph
         for p in placement2placement:
             self.Graph.add_edge(self.getPlacementIdFromPose(p[0]), self.getPlacementIdFromPose(p[1]), pivotGraspids=p[2], pivotCorner=p[3])
+            # flip the rotate orders
+            self.Graph.add_edge(self.getPlacementIdFromPose(p[1]), self.getPlacementIdFromPose(p[0]), pivotGraspids=p[2], pivotCorner=(np.flip(p[3][0], 0), p[3][1], list(reversed(p[3][2]))))
 
         # # need to verify the function correctness
         # self.showPivot(placement2placement[0], base)
@@ -735,6 +741,7 @@ class DemoHelper(DirectObject.DirectObject):
 
         self.demoObj.setMat(pg.cvtMat4np4(pivot_trajectory[self.eventCounter]))
         self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(pivot_trajectory[self.eventCounter].dot(hand_pose_in_obj_frame)))
+
         self.eventCounter += 1
         return task.again
 
@@ -795,7 +802,6 @@ if __name__ == '__main__':
     currentplacement = initial_placement.copy()
 
     # execute a sequence of pivoting actions
-
     for action in pivotActionSequence:
         placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
 
@@ -821,12 +827,20 @@ if __name__ == '__main__':
 
         demoHelper.addEvent("fingerGait", poseTrajectory)
 
-        # pivoting
-        pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, pivotCornerPoint)]
-        demoHelper.addEvent("pivot", pivotTrajectory)
+        if pivotCornerPoint[0].shape[0] > 1: # when the pivoting edge is not sharp
 
-        currentgrasp = [next_grasp, next_jawwidth]
-        currentplacement = pivotTrajectory[-1]
+            rotatedplacementposelist = [placement1pose] + pivotCornerPoint[2] + [placement2pose]
+            for l in range(pivotCornerPoint[0].shape[0]):
+                # pivoting
+                pivotTrajectory = [currentplacement.dot(np.linalg.inv(rotatedplacementposelist[l])).dot(p) for p in pickup_planner.getPivotTrajectory(rotatedplacementposelist[l], rotatedplacementposelist[l+1], [pivotCornerPoint[0][l], pivotCornerPoint[1]])]
+                demoHelper.addEvent("pivot", pivotTrajectory)
+                currentgrasp = [next_grasp, next_jawwidth]
+                currentplacement = pivotTrajectory[-1]
+        else:
+            pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, [pivotCornerPoint[0][0], pivotCornerPoint[1]])]
+            demoHelper.addEvent("pivot", pivotTrajectory)
+            currentgrasp = [next_grasp, next_jawwidth]
+            currentplacement = pivotTrajectory[-1]
 
     # lift up the object
     # move back to the original grasp

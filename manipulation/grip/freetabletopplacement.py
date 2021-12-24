@@ -180,7 +180,7 @@ class FreeTabletopPlacement(object):
 
         # according to all possible finger directions, calculate ff placement
         for d, dn in fingerdirections:
-            ffplacements, ffdirections, _ = pg.generateFFPlacement(self.objtrimeshconv, d, self.objcom, 0.9)
+            ffplacements, ffdirections, _, _ = pg.generateFFPlacement(self.objtrimeshconv, d, self.objcom, 0.9)
 
             for i in range(len(ffplacements)): # remove the placement which is already stable
                 _, ind = self.tpsdirections.query(ffdirections[i])
