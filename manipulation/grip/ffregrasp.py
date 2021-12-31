@@ -750,15 +750,6 @@ class ff_regrasp_planner(object):
 
             self.cleanRenderedObject(base)
 
-
-    # get the ground direction vector from pose in object frame
-    def getGroundDirection(self, pose):
-        gnd_dir = np.array([0,0,-1]) #groupd direction (i.e gravity vector )
-        pos_r = pose[:3,:3]
-        obj_grd_dir_pos = np.dot( np.transpose(pos_r), gnd_dir) # vecktro containing the dir of the object to the groud in the object frame
-        obj_grd_dir_pos= obj_grd_dir_pos/ np.linalg.norm(obj_grd_dir_pos)
-        return obj_grd_dir_pos
-
     def getPointFromPose(self, pose, point):
         return Point3(pose[0][0] * point[0] + pose[1][0] * point[1] + pose[2][0] * point[2] + pose[3][0], \
                       pose[0][1] * point[0] + pose[1][1] * point[1] + pose[2][1] * point[2] + pose[3][1], \
@@ -766,8 +757,8 @@ class ff_regrasp_planner(object):
 
     def getPlacementId(self, placement):
         # get the proper placement id
-        currentPlacementDirection = self.getGroundDirection(placement)
-        placementDirections = [self.getGroundDirection(pg.mat4ToNp(g)) for g in self.tpsmat4s]
+        currentPlacementDirection = pg.getGroundDirection(placement)
+        placementDirections = [pg.getGroundDirection(pg.mat4ToNp(g)) for g in self.tpsmat4s]
 
         diff = 2.0 
         closest_placementid = None

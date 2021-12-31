@@ -934,6 +934,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         possible fixtureless fixturing placements
         relative fixutreless fixturing placements direction in the object frame
         pivot points in the object frame
+        a list of unstable pivot placement between stable placement
 
     author: frank
     """

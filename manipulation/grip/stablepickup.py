@@ -53,7 +53,6 @@ def fibonacci_sphere(samples=100):
 
     return points
 
-
 def mapParallelDirection(d):
     if d[0] < 0.0 or (d[0] == 0.0 and d[1] < 0.0) or (d[0] == 0.0 and d[1] == 0.0 and d[2] < 0.0):
         return (-d[0], -d[1], -d[2])
@@ -102,7 +101,6 @@ class StablePickupPlanner(object):
         self.npnodeobj.setColor(0,0,0.5,0.2)
         self.npnodeobj.setTransparency(TransparencyAttrib.M_dual)
         
-
     def loadFreeAirGrip(self):
         """
         load self.freegripid, etc. from mysqldatabase
@@ -137,8 +135,8 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        random_index = 219
-        # random_index = 347
+        # random_index = 219
+        random_index = 148
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -150,8 +148,8 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        random_placement_index = 1
-        # random_placement_index = 0
+        # random_placement_index = 1
+        random_placement_index = 0
         print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
@@ -182,105 +180,66 @@ class StablePickupPlanner(object):
             ang2 = np.arctan2(*p2[::-1])
             return np.rad2deg((ang1 - ang2) % (2 * np.pi))
 
-        self.hand.setJawwidth(jawwidth)
-        self.hand.setMat(pandanpmat4 = grasppose * liftupPose)
+        def getAngleWithRotationMatrix(rotatematrix_, direction_):
+            temp = rm.transformmat4(rotatematrix_, direction_)
+            return np.arctan2(temp[1], temp[0])
 
-        # find the vertical 2d plane for manipulation
-        fingerNormalDirection = self.getPointFromPose(grasppose * liftupPose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose * liftupPose, Point3(0, 0, 0))
-        z_axis_rotation = pandageom.cvtMat4(rm.rodrigues([0,0,1], angle_between([fingerNormalDirection[0], fingerNormalDirection[1]], [0, 1])))
+        def findWhichRangeDirectionBelongto(anglelist, direction):
+            maxindex = np.argmax(anglelist)
+            minindex = np.argmin(anglelist)
+            if direction > anglelist[maxindex] or direction < anglelist[minindex]:
+                left = min(minindex, maxindex)
+                right = max(minindex, maxindex)
+                if left == 0 and right == len(anglelist) - 1:
+                    return [right, left]
+                else:
+                    return [left, right]
 
-        mass2d_x = self.getPointFromPose(liftupPose*z_axis_rotation, Point3(self.objcom[0], self.objcom[1], self.objcom[2]))[0]
-
-        # find the closest ground contact point
-        # move the object down a little to cause collision
-        liftupPose.setCell(3,2,liftupPose.getCell(3,2) - 1)
-        self.npnodeobj.setMat(liftupPose)
-
-        objbullnode = cd.genCollisionMeshMultiNp(self.npnodeobj)
-        result = self.bulletworldhp.contactTest(objbullnode)
-
-        ground_touching_point_2d, ground_touching_point_3d = [], []
-
-        for c in range(result.getNumContacts()):
-            contact = result.getContact(c)
-            contactpointOnObject = contact.getManifoldPoint().get_position_world_on_b()
-            contactpointOnObject[2] = contactpointOnObject[2] + 1
-            ground_touching_point_2d.append(self.getPointFromPose(z_axis_rotation, contactpointOnObject)[0])
-            ground_touching_point_3d.append(contactpointOnObject)
-
-        liftupPose.setCell(3,2,liftupPose.getCell(3,2) + 1)
-        self.npnodeobj.setMat(liftupPose)
-
-        # the closest x value of ground contact point
-        cloestIndex = np.argmin(map(lambda x:abs(x - mass2d_x), ground_touching_point_2d))
-
-        # we should have the closest ground contact point to the mass center
-        rotationPoint_2d = ground_touching_point_2d[cloestIndex]
-        rotationPoint = ground_touching_point_3d[cloestIndex]
-
-        # find the lowest point on convex on each side
-        counterclockwise_rotation_angle_2d, clockwise_rotation_angle_2d = 1.57, 1.57
-
-        for i in range(len(self.objtrimeshconv.faces)):
-            for j in range(3):
-                vert = self.objtrimeshconv.vertices[self.objtrimeshconv.faces[i][j]]
-                vertp = self.getPointFromPose(liftupPose * z_axis_rotation, vert)
-
-                # if the other side of touch point is so close to the rotate point, then ignore it
-                if np.linalg.norm([abs(rotationPoint_2d - vertp[0]), vertp[2]]) < 1.0:
+            for f in range(len(anglelist)):
+                left = f
+                right = f + 1 if f < len(anglelist) - 1 else 0
+                if (left == maxindex and right == minindex) or (left == minindex and right == maxindex):
                     continue
+                if (anglelist[left] > direction and anglelist[right] < direction) or (anglelist[left] < direction and anglelist[right] > direction):
+                    if left == 0 and right == len(anglelist) - 1:
+                        return [right, left]
+                    else:
+                        return [left, right]
 
-                if vertp[0] > rotationPoint_2d:
-                    temp = np.arctan2(vertp[2], vertp[0] - rotationPoint_2d)
-                    if temp < counterclockwise_rotation_angle_2d and temp >= 0.0:
-                        counterclockwise_rotation_angle_2d = temp
+        # in this section , we first find both ff or stable placement which are on the both side of current lifted up pose
+        # then find the all corner points between this two placements, so we can find how to rotate to both way
 
-                elif vertp[0] < rotationPoint_2d:
-                    temp = np.arctan2(vertp[2], rotationPoint_2d - vertp[0])
-                    if temp < clockwise_rotation_angle_2d and temp >= 0.0:
-                        clockwise_rotation_angle_2d = temp
+        currentfignerdirection = np.array(self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0)))
 
-        placedownpose = LMatrix4f(liftupPose)
-        placedownpose.setCell(3,0,placedownpose.getCell(3,0) - rotationPoint[0])
-        placedownpose.setCell(3,1,placedownpose.getCell(3,1) - rotationPoint[1])
-        placedownpose.setCell(3,2,placedownpose.getCell(3,2) - rotationPoint[2])
+        possibleplacements, possibleplacementdirections, rotatecorners, tempplacements = pg.generateFFPlacement(self.objtrimeshconv, 
+                                                currentfignerdirection, 
+                                                self.objcom, 0.9)
 
-        if rotationPoint_2d < mass2d_x:
-            # rotate to counterclockwise
-            rotmat = rm.rodrigues([fingerNormalDirection[0], fingerNormalDirection[1], fingerNormalDirection[2]], counterclockwise_rotation_angle_2d * 180.0 / np.pi)
-        elif rotationPoint_2d > mass2d_x:
-            #rotate to clockwise
-            rotmat = rm.rodrigues([fingerNormalDirection[0], fingerNormalDirection[1], fingerNormalDirection[2]], -clockwise_rotation_angle_2d * 180.0 / np.pi)
-        placedownpose = placedownpose * pandageom.cvtMat4(rotmat)
+        rotatematrix = trigeom.align_vectors(currentfignerdirection, [0,0,1])
 
-        placedownpose.setCell(3,0,placedownpose.getCell(3,0) + rotationPoint[0])
-        placedownpose.setCell(3,1,placedownpose.getCell(3,1) + rotationPoint[1])
-        placedownpose.setCell(3,2,placedownpose.getCell(3,2) + rotationPoint[2])
+        currentplacementdirection2d = getAngleWithRotationMatrix(rotatematrix, pg.getGroundDirection(liftupPose_t))
+        placementangles = [getAngleWithRotationMatrix(rotatematrix, possibleplacementdirections[p]) for p in range(len(possibleplacementdirections))]
+        twonearplacementdirectionindex = findWhichRangeDirectionBelongto(placementangles, currentplacementdirection2d)
 
-        placedownpose_np = pg.mat4ToNp(placedownpose)
+        pivotingplacements = [possibleplacements[twonearplacementdirectionindex[0]]] + tempplacements[twonearplacementdirectionindex[0]] + [possibleplacements[twonearplacementdirectionindex[1]]]
 
-        result = [placedownpose_np.copy()]
+        # find where current object pose is in.
+        placementdirectionangles = []
 
-        # calculate the rotate angle
-        r = R.from_dcm((np.linalg.inv(placedownpose_np).dot(liftupPose_t))[:3, :3]).as_rotvec()
-        rotateAngle = np.linalg.norm(r)
-        rotateAxis = r / rotateAngle
-                
-        stepNum = 30
-        stepRotation = rotateAngle / stepNum * rotateAxis
+        placementdirectionangles.append(getAngleWithRotationMatrix(rotatematrix, possibleplacementdirections[twonearplacementdirectionindex[0]]))
+        for cp in tempplacements[twonearplacementdirectionindex[0]]:
+            placementdirectionangles.append(getAngleWithRotationMatrix(rotatematrix, pg.getGroundDirection(cp)))
+        placementdirectionangles.append(getAngleWithRotationMatrix(rotatematrix, possibleplacementdirections[twonearplacementdirectionindex[1]]))
 
-        shiftmatrix = np.identity(4)
-        rotateMatrix = np.identity(4)
-        shiftmatrix[:3, 3] = rotationPoint
-        
-        for i in range(stepNum):
-            rotateMatrix[:3, :3] = R.from_rotvec(stepRotation * i).as_dcm()
-            result.append(shiftmatrix.dot(rotateMatrix).dot(np.linalg.inv(shiftmatrix)).dot(placedownpose_np))
-        
-        result.append(liftupPose_t)
+        twoplacements = findWhichRangeDirectionBelongto(placementdirectionangles, currentplacementdirection2d)
 
+        leftwaycorner = rotatecorners[twonearplacementdirectionindex[0]][:twoplacements[1]]
+        leftwayplacements = pivotingplacements[:twoplacements[1]]
 
-        return placedownpose_np, result
+        rightwaycorner = list(reversed(rotatecorners[twonearplacementdirectionindex[0]][twoplacements[0]:]))
+        rightwayplacements = list(reversed(pivotingplacements[twoplacements[1]:]))
+
+        return leftwayplacements[0], leftwayplacements, leftwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
 
     def getPrePickupPose(self, grasppose, jawwidth):
         '''
@@ -766,12 +725,12 @@ if __name__ == '__main__':
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -790,7 +749,7 @@ if __name__ == '__main__':
 
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
 
-    placedownPose, liftuptrajectory = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
+    placedownPose, liftuptrajectoryplacement, liftuptrajectorycorners, liftupfingerdirection = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
 
     pickup_planner.createPlacementGraph()
 
@@ -803,6 +762,7 @@ if __name__ == '__main__':
 
     # execute a sequence of pivoting actions
     for action in pivotActionSequence:
+
         placementid1, placementid2, pivotGraspslist, pivotCornerPoint = action
 
         placement1pose = pg.mat4ToNp(pickup_planner.gdb.loadFreeTabletopPlacementByIds(placementid1))
@@ -852,9 +812,14 @@ if __name__ == '__main__':
 
     demoHelper.addEvent("fingerGait", poseTrajectory)
 
-    # lift up
-    liftuptrajectory = [currentplacement.dot(np.linalg.inv(placedownPose)).dot(p) for p in liftuptrajectory]
-    demoHelper.addEvent("pivot", liftuptrajectory)
+    liftuptrajectoryplacement.append(liftuppose)
+
+    for s in range(len(liftuptrajectorycorners)):
+        pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
+        demoHelper.addEvent("pivot", pivotTrajectory)
+        currentplacement = pivotTrajectory[-1]
+
+    pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
 
 
     #####################################################################################
