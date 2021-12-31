@@ -136,7 +136,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        random_index = 129
+        random_index = 0
         # random_index = 125
         print("random index ", random_index)
 
@@ -148,7 +148,7 @@ class StablePickupPlanner(object):
         if len(result) == 0:
             print("there is no way to place the object with current grasp")
             return None, None
-        random_placement_index = random.randint(0, len(result))
+        random_placement_index = random.randint(0, len(result) - 1)
         # random_placement_index = 1
         random_placement_index = 0
         print("check random placement id", random_placement_index)
