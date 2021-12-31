@@ -136,7 +136,7 @@ class StablePickupPlanner(object):
         """
         random_index = random.randint(0, len(self.freegripid))
         # random_index = 219
-        random_index = 148
+        random_index = 208
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -174,11 +174,6 @@ class StablePickupPlanner(object):
         '''
         liftupPose = pg.cvtMat4np4(liftupPose_t)
         grasppose = pg.cvtMat4np4(grasppose_t)
-
-        def angle_between(p1, p2):
-            ang1 = np.arctan2(*p1[::-1])
-            ang2 = np.arctan2(*p2[::-1])
-            return np.rad2deg((ang1 - ang2) % (2 * np.pi))
 
         def getAngleWithRotationMatrix(rotatematrix_, direction_):
             temp = rm.transformmat4(rotatematrix_, direction_)
@@ -233,13 +228,51 @@ class StablePickupPlanner(object):
 
         twoplacements = findWhichRangeDirectionBelongto(placementdirectionangles, currentplacementdirection2d)
 
+        # need to check collision of the gripper so we can determine which way should be used.
+
         leftwaycorner = rotatecorners[twonearplacementdirectionindex[0]][:twoplacements[1]]
         leftwayplacements = pivotingplacements[:twoplacements[1]]
+
+        leftAvalibility = True
+        rightAvalibility = True
+
+        for leftposes in leftwayplacements:
+            self.hand.setJawwidth(jawwidth)
+            self.hand.setMat(pandanpmat4 = grasppose * pg.cvtMat4np4(leftposes))
+            if self.bulletworldhp.contactTest(cd.genCollisionMeshMultiNp(self.hand.handnp)).getNumContacts():
+                leftAvalibility = False
+                break
+
 
         rightwaycorner = list(reversed(rotatecorners[twonearplacementdirectionindex[0]][twoplacements[0]:]))
         rightwayplacements = list(reversed(pivotingplacements[twoplacements[1]:]))
 
-        return leftwayplacements[0], leftwayplacements, leftwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
+        for rightposes in rightwayplacements:
+            self.hand.setJawwidth(jawwidth)
+            self.hand.setMat(pandanpmat4 = grasppose * pg.cvtMat4np4(rightposes))
+            if self.bulletworldhp.contactTest(cd.genCollisionMeshMultiNp(self.hand.handnp)).getNumContacts():
+                rightAvalibility = False
+                break
+
+        def angleDiff(target, source):
+            a = target - source
+            if a > np.pi:
+                a -= (2.0 * np.pi)
+            if a < -np.pi:
+                a += (2.0 * np.pi)
+            return abs(a)
+
+        if not leftAvalibility and rightAvalibility:
+            return rightwayplacements[0], rightwayplacements, rightwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
+        elif not rightAvalibility and leftAvalibility:
+            return leftwayplacements[0], leftwayplacements, leftwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
+        elif angleDiff(placementdirectionangles[0], currentplacementdirection2d) < angleDiff(placementdirectionangles[1], currentplacementdirection2d):
+            return leftwayplacements[0], leftwayplacements, leftwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
+        else:
+            return rightwayplacements[0], rightwayplacements, rightwaycorner, self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0))
+        
+
+
 
     def getPrePickupPose(self, grasppose, jawwidth):
         '''
@@ -806,11 +839,12 @@ if __name__ == '__main__':
     # move back to the original grasp
     grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], input_grasp[0], input_grasp[1], currentplacement, base)
 
-    poseTrajectory = []
-    for g in range(len(grasp_trajectory) - 1):
-        poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(currentplacement.dot(grasp_trajectory[g]), currentplacement.dot(grasp_trajectory[g+1])))
+    if grasp_trajectory != None:
+        poseTrajectory = []
+        for g in range(len(grasp_trajectory) - 1):
+            poseTrajectory.extend(regrasp_planner.getLinearPoseTrajectory(currentplacement.dot(grasp_trajectory[g]), currentplacement.dot(grasp_trajectory[g+1])))
 
-    demoHelper.addEvent("fingerGait", poseTrajectory)
+        demoHelper.addEvent("fingerGait", poseTrajectory)
 
     liftuptrajectoryplacement.append(liftuppose)
 
@@ -826,8 +860,8 @@ if __name__ == '__main__':
     #                                  show the demo                                    #
     #####################################################################################
 
-    demoHelper.setObjPose(initial_placement)
-    demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
+    # demoHelper.setObjPose(initial_placement)
+    # demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
 
     def updateworld(world, task):
         world.doPhysics(globalClock.getDt())
