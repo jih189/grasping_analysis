@@ -33,6 +33,7 @@ from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation as R
 
 from direct.task import Task
+from time import sleep
 
 # fibonacci sphere points generator
 def fibonacci_sphere(samples=100):
@@ -84,7 +85,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.validangle = 0.07
+        self.validangle = 0.2
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -135,8 +136,8 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 219
-        random_index = 208
+        random_index = 129
+        # random_index = 125
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -147,7 +148,7 @@ class StablePickupPlanner(object):
         if len(result) == 0:
             print("there is no way to place the object with current grasp")
             return None, None
-        random_placement_index = random.randint(0, len(result) - 1)
+        random_placement_index = random.randint(0, len(result))
         # random_placement_index = 1
         random_placement_index = 0
         print("check random placement id", random_placement_index)
@@ -460,6 +461,7 @@ class StablePickupPlanner(object):
                     commonvalidgrasps = np.vstack((commonvalidgrasps, np.arccos(graspsdirections.dot(massdirectiontemp)) < self.validangle))
 
                 valid_common_grasp_bit = commonvalidgrasps.all(0)
+
                 if valid_common_grasp_bit.any():
                     # calculate the placement pose with placement direction
                     placementpose1 = self.placementdirection2pose(ffdirections[l])
@@ -660,8 +662,9 @@ class StablePickupPlanner(object):
             # flip the rotate orders
             self.Graph.add_edge(self.getPlacementIdFromPose(p[1]), self.getPlacementIdFromPose(p[0]), pivotGraspids=p[2], pivotCorner=(np.flip(p[3][0], 0), p[3][1], list(reversed(p[3][2]))))
 
-        # # need to verify the function correctness
-        # self.showPivot(placement2placement[0], base)
+            # test
+            # print("add placement ", self.getPlacementIdFromPose(p[0]), " and ", self.getPlacementIdFromPose(p[1]))
+
 
     def getPivotPath(self, currentPlacement, targetPlacement):
         result = []
@@ -697,7 +700,7 @@ class DemoHelper(DirectObject.DirectObject):
 
         self.counter = 0
         self.eventCounter = 0
-        self.accept('w', self.testevent)
+        self.accept('w', self.executeEvent)
 
     def setObjPose(self, placementPose):
         """
@@ -737,19 +740,55 @@ class DemoHelper(DirectObject.DirectObject):
         self.eventCounter += 1
         return task.again
 
-    def testevent(self):
-        if self.counter == len(self.eventQueue):
-            sys.exit()
-        # execute the event according to the counter
-        action, trajectory = self.eventQueue[self.counter]
+    def executeAllEvent(self, task, eventQueue_):
+        if self.counter == len(eventQueue_):
+            return task.done
+        
+        action, trajectory = eventQueue_[self.counter]
+
+        if self.eventCounter == len(trajectory):
+            self.eventCounter = 0
+            self.counter += 1
+            return task.again
+
         if action == "fingerGait":
-            self.eventCounter = 0
-            taskMgr.doMethodLater(0.1, self.fingerGaiting, 'fingerGaitTask', extraArgs=[Task.Task(self.fingerGaiting), trajectory])
+            self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(trajectory[self.eventCounter]))
+
         elif action == "pivot":
-            self.eventCounter = 0
-            taskMgr.doMethodLater(0.1, self.pivoting, 'pivotTask', extraArgs=[Task.Task(self.pivoting), trajectory])
-        print("counter", self.counter)
-        self.counter += 1
+            original_object_pose = pg.mat4ToNp(self.demoObj.getMat())
+            original_hand_pose = pg.mat4ToNp(self.hand.getMat())
+            hand_pose_in_obj_frame = np.linalg.inv(original_object_pose).dot(original_hand_pose)
+
+            self.demoObj.setMat(pg.cvtMat4np4(trajectory[self.eventCounter]))
+            self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(trajectory[self.eventCounter].dot(hand_pose_in_obj_frame)))
+
+        self.eventCounter += 1
+
+        return task.again
+
+    def executeEvent(self):
+        if len(taskMgr.getDoLaters()) > 0:
+            # some tasks is not done yet, so skip this event trigger
+            return
+        elif self.counter != 0 or self.eventCounter != 0:
+            sys.exit()
+
+        taskMgr.doMethodLater(0.1, self.executeAllEvent, 'allevent', extraArgs=[Task.Task(self.executeAllEvent), self.eventQueue])
+
+        ############################################################
+
+        # if self.counter == len(self.eventQueue):
+        #     sys.exit()
+        # # execute the event according to the counter
+        # action, trajectory = self.eventQueue[self.counter]
+        # if action == "fingerGait":
+        #     self.eventCounter = 0
+        #     taskMgr.doMethodLater(0.1, self.fingerGaiting, 'fingerGaitTask', extraArgs=[Task.Task(self.fingerGaiting), trajectory])
+        # elif action == "pivot":
+        #     self.eventCounter = 0
+        #     taskMgr.doMethodLater(0.1, self.pivoting, 'pivotTask', extraArgs=[Task.Task(self.pivoting), trajectory])
+        # print("counter", self.counter)
+        # self.counter += 1
 
 
 if __name__ == '__main__':
@@ -846,13 +885,19 @@ if __name__ == '__main__':
 
         demoHelper.addEvent("fingerGait", poseTrajectory)
 
-    liftuptrajectoryplacement.append(liftuppose)
+        liftuptrajectoryplacement.append(liftuppose)
 
-    for s in range(len(liftuptrajectorycorners)):
-        pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
-        demoHelper.addEvent("pivot", pivotTrajectory)
-        currentplacement = pivotTrajectory[-1]
+        for s in range(len(liftuptrajectorycorners)):
+            pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
+            demoHelper.addEvent("pivot", pivotTrajectory)
+            currentplacement = pivotTrajectory[-1]
+        demoHelper.setObjPose(initial_placement)
+        demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
 
+    else:
+        print("fail to manipulate the object with some reason")
+    
+    liftuppose[0][3] += 300
     pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
 
 
@@ -860,8 +905,6 @@ if __name__ == '__main__':
     #                                  show the demo                                    #
     #####################################################################################
 
-    # demoHelper.setObjPose(initial_placement)
-    # demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
 
     def updateworld(world, task):
         world.doPhysics(globalClock.getDt())
