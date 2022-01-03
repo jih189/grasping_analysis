@@ -136,7 +136,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 0
+        random_index = 291
         # random_index = 456
         print("random index ", random_index)
 
@@ -149,7 +149,7 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        # random_placement_index = 1
+        random_placement_index = 1
         # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
@@ -508,6 +508,9 @@ class StablePickupPlanner(object):
                                 positiveValidPivotGraspid.append(graspid)
                             else:
                                 negativeValidPivotGraspid.append(graspid)
+
+                    if len(positiveValidPivotGraspid) + len(negativeValidPivotGraspid) == 0:
+                        continue
 
                     if placement1type == 0 and placement2type == 0:
                         placement2placement.append([placement1poseid, placement2poseid , placement1poseid, placement2poseid, positiveValidPivotGraspid + negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
@@ -897,6 +900,7 @@ if __name__ == '__main__':
     currentgrasp = input_grasp
     currentplacement = initial_placement.copy()
 
+
     # execute a sequence of pivoting actions
     for action in pivotActionSequence:
 
@@ -964,7 +968,6 @@ if __name__ == '__main__':
     
     liftuppose[0][3] += 300
     pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
-
 
     #####################################################################################
     #                                  show the demo                                    #
