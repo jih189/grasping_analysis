@@ -575,15 +575,8 @@ class FreeTabletopPlacement(object):
                 placementTable[i][j][0] = i - int(placementTable.shape[0] / 2)
                 placementTable[i][j][1] = j - int(placementTable.shape[1] / 2)
         placementTable = placementTable.reshape(-1,2)
-
-        # placementTable = np.zeros((numberOfPlacements, 2))
-        # for i in range(numberOfPlacements):
-        #     placementTable[i][0] = i - int(numberOfPlacements/2)
-        #     placementTable[i][1] = 0
         
-
         for i in range(len(self.tpsmat4s)):
-
 
             tx, ty = placementTable[i]
             objrotmat = self.tpsmat4s[i]

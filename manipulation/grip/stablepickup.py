@@ -136,8 +136,8 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        random_index = 0
-        # random_index = 125
+        # random_index = 0
+        # random_index = 456
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -150,11 +150,11 @@ class StablePickupPlanner(object):
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
         # random_placement_index = 1
-        random_placement_index = 0
+        # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
-
+        
     def getPointFromPose(self, pose, point):
         return Point3(pose[0][0] * point[0] + pose[1][0] * point[1] + pose[2][0] * point[2] + pose[3][0], \
                       pose[0][1] * point[0] + pose[1][1] * point[1] + pose[2][1] * point[2] + pose[3][1], \
@@ -350,6 +350,7 @@ class StablePickupPlanner(object):
 
         # plot the object
         objecttemp.setMat(pg.cvtMat4np4(placementpose))
+        # objecttemp.setMat(pg.cvtMat4np4(np.identity(4)))
         objecttemp.reparentTo(base.render)
 
     
@@ -411,7 +412,16 @@ class StablePickupPlanner(object):
 
         return fingerdirections, contactpointInPlane, graspsIdInPlane
 
+    def getdmgid(self, placementid_, fingerdirection):
+        sql = "SELECT dmgs.iddmg, dmgs.planevector FROM dmgs WHERE dmgs.placementid=%d " % placementid_
+        for dmgid, dmgplane in self.gdb.execute(sql):
+            dmg_plane = dc.strToV6(dmgplane)
+            if np.linalg.norm(fingerdirection - dmg_plane[3:6]) <= 0.1:
+                return dmgid
+        return None    
+
     def generateManipulationCircle(self, fingerdirections, contactpointInPlane, graspsIdInPlane):
+
         placement2placement = []
         # according to all possible finger directions, a set of placements can be pivoted by that grasp
         # the placements is in a loop according to the fingertip direction
@@ -467,8 +477,12 @@ class StablePickupPlanner(object):
                     placementpose1 = self.placementdirection2pose(ffdirections[l])
                     placementpose2 = self.placementdirection2pose(ffdirections[(l + 1) % len(rotateCorners)])
 
+                    placement1poseid, placement1type = self.getPlacementIdFromPose(placementpose1)
+                    placement2poseid, placement2type = self.getPlacementIdFromPose(placementpose2)
+
                     # need to verify the grasp has no collision with the ground in two different placements
-                    validPivotGraspid = []
+                    positiveValidPivotGraspid = []
+                    negativeValidPivotGraspid = []
 
                     for graspid in np.array(currentGraspsIds)[valid_common_grasp_bit]:
 
@@ -483,13 +497,47 @@ class StablePickupPlanner(object):
                         # add hand model to bulletworld
                         hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
                         result2 = self.bulletworldhp.contactTest(hndbullnode)
+
+
                         if not result1.getNumContacts() and not result2.getNumContacts():
-                            validPivotGraspid.append(graspid)
+                            # find grasp direction
+                            cct0, cct1 = self.hand.getFingerTips()
+                            cct0 = self.getPointFromPose(pivotgrasp, cct0)
+                            cct1 = self.getPointFromPose(pivotgrasp, cct1)
+                            if np.dot((cct1 - cct0)/np.linalg.norm(cct1-cct0), fingerdirection) > 0:
+                                positiveValidPivotGraspid.append(graspid)
+                            else:
+                                negativeValidPivotGraspid.append(graspid)
 
-                    # need to find the placements during rotation
+                    if placement1type == 0 and placement2type == 0:
+                        placement2placement.append([placement1poseid, placement2poseid , placement1poseid, placement2poseid, positiveValidPivotGraspid + negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                    elif placement1type == 0 and placement2type == 1:
+                        cct0 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose2), [0,0,0]))
+                        cct1 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose2), fingerdirection))
+                        positiveplacement2nodeid = self.getdmgid(placement2poseid, (cct1-cct0)/np.linalg.norm(cct1-cct0))
+                        negativeplacement2nodeid = self.getdmgid(placement2poseid, (cct0-cct1)/np.linalg.norm(cct0-cct1))
+                        placement2placement.append([placement1poseid, positiveplacement2nodeid , placement1poseid, placement2poseid, positiveValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                        placement2placement.append([placement1poseid, negativeplacement2nodeid , placement1poseid, placement2poseid, negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                    elif placement1type == 1 and placement2type == 0:
+                        cct0 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose1), [0,0,0]))
+                        cct1 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose1), fingerdirection))
+                        positiveplacement1nodeid = self.getdmgid(placement1poseid, (cct1-cct0)/np.linalg.norm(cct1-cct0))
+                        negativeplacement1nodeid = self.getdmgid(placement1poseid, (cct0-cct1)/np.linalg.norm(cct0-cct1))
+                        placement2placement.append([positiveplacement1nodeid, placement2poseid , placement1poseid, placement2poseid, positiveValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                        placement2placement.append([negativeplacement1nodeid, placement2poseid , placement1poseid, placement2poseid, negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                    elif placement1type == 1 and placement2type == 1:
+                        cct0 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose1), [0,0,0]))
+                        cct1 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose1), fingerdirection))
+                        positiveplacement1nodeid = self.getdmgid(placement1poseid, (cct1-cct0)/np.linalg.norm(cct1-cct0))
+                        negativeplacement1nodeid = self.getdmgid(placement1poseid, (cct0-cct1)/np.linalg.norm(cct0-cct1))
 
+                        cct0 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose2), [0,0,0]))
+                        cct1 = np.array(self.getPointFromPose(pg.cvtMat4np4(placementpose2), fingerdirection))
+                        positiveplacement2nodeid = self.getdmgid(placement2poseid, (cct1-cct0)/np.linalg.norm(cct1-cct0))
+                        negativeplacement2nodeid = self.getdmgid(placement2poseid, (cct0-cct1)/np.linalg.norm(cct0-cct1))
+                        placement2placement.append([positiveplacement1nodeid, positiveplacement2nodeid , placement1poseid, placement2poseid, positiveValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
+                        placement2placement.append([negativeplacement1nodeid, negativeplacement2nodeid , placement1poseid, placement2poseid, negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
 
-                    placement2placement.append([placementpose1, placementpose2, validPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
 
         return placement2placement
 
@@ -628,20 +676,22 @@ class StablePickupPlanner(object):
 
     def getPlacementIdFromPose(self, pose):
         """
-        given a pose, this function will return the placement id whose has most simlilar pose.
+        given a pose, this function will return the placement id and its placement type whose has most simlilar pose.
         """
         obj_dir_pos_2match = pg.getGroundDirection(pose)
         diff = 2.0 
         closest_placementid = None
-        for placementid, placementpose in zip(self.placementid, self.tpsmat4s):
+        closest_placementtype = None
+        for placementid, placementpose, placementtype in zip(self.placementid, self.tpsmat4s, self.placementtype):
             placement_pose = pg.mat4ToNp(placementpose)
             currnt_dir_pos = pg.getGroundDirection(placement_pose)
             
             currnt_diff = np.linalg.norm(currnt_dir_pos - obj_dir_pos_2match)
             if currnt_diff <= diff:
                 closest_placementid = placementid
+                closest_placementtype = placementtype
                 diff = currnt_diff
-        return closest_placementid 
+        return closest_placementid, closest_placementtype
 
     def createPlacementGraph(self):
         '''
@@ -658,19 +708,34 @@ class StablePickupPlanner(object):
 
         # build the graph
         for p in placement2placement:
-            self.Graph.add_edge(self.getPlacementIdFromPose(p[0]), self.getPlacementIdFromPose(p[1]), pivotGraspids=p[2], pivotCorner=p[3])
+            self.Graph.add_edge(p[0], p[1], placementid0=p[2], placementid1=p[3], pivotGraspids=p[4], pivotCorner=p[5])
             # flip the rotate orders
-            self.Graph.add_edge(self.getPlacementIdFromPose(p[1]), self.getPlacementIdFromPose(p[0]), pivotGraspids=p[2], pivotCorner=(np.flip(p[3][0], 0), p[3][1], list(reversed(p[3][2]))))
+            self.Graph.add_edge(p[1], p[0], placementid0=p[3], placementid1=p[2], pivotGraspids=p[4], pivotCorner=(np.flip(p[5][0], 0), p[5][1], list(reversed(p[5][2]))))
 
-            # test
-            # print("add placement ", self.getPlacementIdFromPose(p[0]), " and ", self.getPlacementIdFromPose(p[1]))
-
-
-    def getPivotPath(self, currentPlacement, targetPlacement):
+    def getPivotPath(self, currentPlacement, currentGrasp, targetPlacement, targetGrasp):
         result = []
-        path = nx.shortest_path(self.Graph, self.getPlacementIdFromPose(currentPlacement), self.getPlacementIdFromPose(targetPlacement))
+
+        cct0, cct1 = self.hand.getFingerTips()
+        cct0 = self.getPointFromPose(pg.cvtMat4np4(currentGrasp[0]) * pg.cvtMat4np4(currentPlacement), cct0)
+        cct1 = self.getPointFromPose(pg.cvtMat4np4(currentGrasp[0]) * pg.cvtMat4np4(currentPlacement), cct1)
+
+        currentPlacementid, currentPlacementtype = self.getPlacementIdFromPose(currentPlacement)
+        currrentplacementnodeid = currentPlacementid
+        if currentPlacementtype == 1:
+            currrentplacementnodeid = self.getdmgid(currentPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
+
+        cct0, cct1 = self.hand.getFingerTips()
+        cct0 = self.getPointFromPose(pg.cvtMat4np4(targetGrasp[0]) * pg.cvtMat4np4(targetPlacement), cct0)
+        cct1 = self.getPointFromPose(pg.cvtMat4np4(targetGrasp[0]) * pg.cvtMat4np4(targetPlacement), cct1)
+
+        targetPlacementid, targetPlacementtype = self.getPlacementIdFromPose(targetPlacement)
+        targetplacementnodeid = targetPlacementid
+        if targetPlacementtype == 1:
+            targetplacementnodeid = self.getdmgid(targetPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
+
+        path = nx.shortest_path(self.Graph, currrentplacementnodeid, targetplacementnodeid)
         for i in range(len(path)-1):
-            result.append([path[i], path[i+1], self.Graph.get_edge_data(path[i],path[i+1])['pivotGraspids'], self.Graph.get_edge_data(path[i],path[i+1])['pivotCorner']])
+            result.append([self.Graph.get_edge_data(path[i],path[i+1])['placementid0'], self.Graph.get_edge_data(path[i],path[i+1])['placementid1'], self.Graph.get_edge_data(path[i],path[i+1])['pivotGraspids'], self.Graph.get_edge_data(path[i],path[i+1])['pivotCorner']])
         return result
 
 
@@ -826,7 +891,7 @@ if __name__ == '__main__':
     pickup_planner.createPlacementGraph()
 
     # find the pivot action sequence
-    pivotActionSequence = pickup_planner.getPivotPath(initial_placement, placedownPose)
+    pivotActionSequence = pickup_planner.getPivotPath(initial_placement, input_grasp, placedownPose, input_grasp)
     # [placementid1, placementid2, list of pivot grasps, pivot corner point]
 
     currentgrasp = input_grasp
