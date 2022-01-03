@@ -405,7 +405,11 @@ class ff_regrasp_planner(object):
             hndbullnode = cd.genCollisionMeshMultiNp(self.hand.handnp)
             result0 = self.bulletworldhp.contactTest(hndbullnode)
             result1 = self.bulletObj.contactTest(hndbullnode)
-            if result0.getNumContacts() or result1.getNumContacts():
+
+            cct0, cct1 = self.hand.getFingerTips()
+            cct0 = self.getPointFromPose(pg.cvtMat4np4(t), cct0)
+            cct1 = self.getPointFromPose(pg.cvtMat4np4(t), cct1)
+            if result0.getNumContacts() or result1.getNumContacts() or (not self.bulletObj.rayTestAll(cct0, cct1).hasHits()):
                 result = False
                 break
 

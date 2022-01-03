@@ -136,7 +136,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        random_index = 291
+        # random_index = 273
         # random_index = 456
         print("random index ", random_index)
 
@@ -149,7 +149,7 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        random_placement_index = 1
+        # random_placement_index = 1
         # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
@@ -777,6 +777,7 @@ class DemoHelper(DirectObject.DirectObject):
         self.demoObj.setMat(pg.cvtMat4np4(placementPose))
         self.demoObj.reparentTo(self.base.render)
 
+
     def setHandPose(self, handPose, jawwidth):
 
         self.hand.setJawwidth(jawwidth)
@@ -790,6 +791,7 @@ class DemoHelper(DirectObject.DirectObject):
         if self.eventCounter > len(gripper_trajectory) - 1:
             return task.done
         self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(gripper_trajectory[self.eventCounter]))
+
         self.eventCounter += 1
         return task.again
     
@@ -821,6 +823,7 @@ class DemoHelper(DirectObject.DirectObject):
 
         if action == "fingerGait":
             self.hand.setMat(pandanpmat4 = pg.cvtMat4np4(trajectory[self.eventCounter]))
+            
 
         elif action == "pivot":
             original_object_pose = pg.mat4ToNp(self.demoObj.getMat())
