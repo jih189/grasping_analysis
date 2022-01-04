@@ -80,7 +80,8 @@ class FreeTabletopPlacement(object):
         self.objcom = self.objtrimesh.center_mass
         self.objtrimeshconv=self.objtrimesh.convex_hull
         # oc means object convex
-        self.ocfacets, self.ocfacetnormals = self.objtrimeshconv.facets_over(.9999)
+        # self.ocfacets, self.ocfacetnormals = self.objtrimeshconv.facets_over(.9999)
+        self.ocfacets, self.ocfacetnormals = self.objtrimeshconv.facets_over(faceangle=.995)
         # ocfacets is the group of index of facets to be a face
 
         # for dbaccess
@@ -100,7 +101,7 @@ class FreeTabletopPlacement(object):
         self.bulletworldhp1.attachRigidBody(self.planebullnode1)
 
         # according to your object, do not set this too high
-        self.planebullnode2 = cd.genCollisionPlane(offset=20)
+        self.planebullnode2 = cd.genCollisionPlane(offset=5)
         self.bulletworldhplowest.attachRigidBody(self.planebullnode2)
 
         self.handpkg = handpkg
@@ -110,6 +111,7 @@ class FreeTabletopPlacement(object):
         # for dbsave
         # each tpsmat4 corresponds to a set of tpsgripcontacts/tpsgripnormals/tpsgripjawwidth list
         self.tpsmat4s = None
+        self.grounddirection = None
         self.tpsgripcontacts = None
         self.tpsgripnormals = None
         self.tpsgripjawwidth = None
@@ -137,6 +139,7 @@ class FreeTabletopPlacement(object):
         '''
 
         self.tpsffplacements = []
+        self.grounddirection_temp = []
         self.tpsffgrips = []
 
         # use a fibonacci method to generate a set of direction in 2d
@@ -186,9 +189,11 @@ class FreeTabletopPlacement(object):
                 _, ind = self.tpsdirections.query(ffdirections[i])
                 if stabledirectionbit[ind] == 0:
                     self.tpsffplacements.append(pg.cvtMat4np4(ffplacements[i]))
+                    self.grounddirection_temp.append(ffdirections[i])
                     self.tpsffgrips.append(dn)
 
         self.tpsmat4s += self.tpsffplacements
+        self.grounddirection += self.grounddirection_temp
 
     def loadFreeAirGrip(self):
         """
@@ -221,6 +226,7 @@ class FreeTabletopPlacement(object):
         :return:
         """
         self.tpsmat4s = []
+        self.grounddirection = []
         self.stableplacementdirections = []
 
         for i in range(len(self.ocfacets)):
@@ -246,9 +252,11 @@ class FreeTabletopPlacement(object):
                 apntpnt = Point(facetinterpnt2d[0], facetinterpnt2d[1])
                 dist2p = apntpnt.distance(facetp.exterior)
                 dist2c = np.linalg.norm(np.array([hitpos[0],hitpos[1],hitpos[2]])-np.array([pFrom[0],pFrom[1],pFrom[2]]))
+                
                 if dist2p/dist2c >= doverh:
                     # hit and stable
                     self.tpsmat4s.append(pg.cvtMat4np4(facetmat4))
+                    self.grounddirection.append((np.array([hitpos[0],hitpos[1],hitpos[2]])-np.array([pFrom[0],pFrom[1],pFrom[2]]))/dist2c)
                     # record the stable placement direction
                     self.stableplacementdirections.append((np.array([hitpos[0],hitpos[1],hitpos[2]])-np.array([pFrom[0],pFrom[1],pFrom[2]]))/dist2c)
 
@@ -284,6 +292,7 @@ class FreeTabletopPlacement(object):
             self.tpsgriprotmats.append([])
             self.tpsgripjawwidth.append([])
             self.tpsgripidfreeair.append([])
+
             if i >= self.numberOfStable:
                 ii = i - self.numberOfStable
                 for rotmat, jawwidth, gripid, cctn0, cctn1 in self.tpshasgrasp[self.tpsffgrips[ii]]:
@@ -561,7 +570,6 @@ class FreeTabletopPlacement(object):
         distanceBetweenObjects = 350
 
         numberOfPlacements = len(self.tpsmat4s)
-        print("number of placements = ", numberOfPlacements)
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
         tableHeight = 0
         if(numberOfPlacements % tableSideLength == 0.0):
@@ -589,6 +597,7 @@ class FreeTabletopPlacement(object):
             geom = pg.packpandageom(self.objtrimesh.vertices,
                                     self.objtrimesh.face_normals,
                                     self.objtrimesh.faces)
+
             node = GeomNode('obj')
             node.addGeom(geom)
             star = NodePath('obj')
@@ -596,10 +605,15 @@ class FreeTabletopPlacement(object):
             if i < self.numberOfStable:
                 star.setColor(Vec4(.7,0.3,0,1))
             else:
-                star.setColor(Vec4(.7,0.8,0,1))
+                star.setColor(Vec4(.7,0.8,0,0.7))
             star.setTransparency(TransparencyAttrib.MAlpha)
             star.setMat(objrotmat)
             star.reparentTo(base.render)
+
+            pandageom.plotArrow(base.render, spos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)),
+                                    epos=self.getPointFromPose(objrotmat, Point3(self.grounddirection[i][0], self.grounddirection[i][1], self.grounddirection[i][2])),
+                                    length=100,
+                                    rgba=Vec4(0,0,1,1))
 
             # show the gripers
             for j in range(len(self.tpsgriprotmats[i])):
@@ -612,8 +626,6 @@ class FreeTabletopPlacement(object):
                 tmphnd = self.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
                 tmphnd.setMat(pandanpmat4 = hndrotmat)
                 tmphnd.setJawwidth(hndjawwidth)
-                # tmphnd.setJawwidth(0)
-                # tmprtq85.setJawwidth(80)
                 
                 # cct0 = self.tpsgripcontacts[i][j][0]
                 # cct1 = self.tpsgripcontacts[i][j][1]
@@ -637,7 +649,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

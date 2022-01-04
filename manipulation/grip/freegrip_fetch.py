@@ -31,9 +31,9 @@ class Freegrip(fgcp.FreegripContactpairs):
         super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=200, readser=readser)
         if readser is False:
             # use this one to set the max and min distance from fingertips to the boundary
-            self.removeBadSamples(mindist=5, maxdist=25)
-            self.clusterFacetSamplesRNN(reduceRadius=8)
-            self.planContactpairs(torqueresist)
+            self.removeBadSamples(mindist=1, maxdist=25)
+            self.clusterFacetSamplesRNN(reduceRadius=3)
+            self.planContactpairs(torqueresist, fgrtipdist = 30)
             # self.saveSerialized("tmpcp.pickle")
         else:
             pass
@@ -287,7 +287,8 @@ if __name__=='__main__':
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     freegriptst = Freegrip(objpath, handpkg, readser=False, torqueresist = 120)

@@ -6,12 +6,13 @@ from shapely.geometry import Polygon
 from shapely.geometry import Point
 from shapely.geometry import LineString
 from shapely.ops import nearest_points
-from shapely.ops import cascaded_union, unary_union
+from shapely.ops import cascaded_union
 from trimesh import geometry as trigeom
 import math
 import trimesh
+import time
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # import geopandas as gpd
 
 class PandaGeomGen(object):
@@ -939,12 +940,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     author: frank
     """
     def inSameLine(p1, p2, p3):
-        # maxSize = math.sqrt( ((p1[0]-p2[0])**2)+((p1[1]-p2[1])**2) ) + math.sqrt( ((p2[0]-p3[0])**2)+((p2[1]-p3[1])**2) )+math.sqrt( ((p3[0]-p1[0])**2)+((p3[1]-p1[1])**2) )
-        # angleD = abs(p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1])) / maxSize
-        # if angleD < 0.5:
-        #     return True
-        # else:
-        #     return False
         d1 = math.atan2(p2[1] - p1[1], p2[0] - p1[0])
         d2 = math.atan2(p3[1] - p2[1], p3[0] - p2[0])
         diff = (d2 - d1 + math.pi) % (2 * math.pi) - math.pi
@@ -970,7 +965,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
 
         return p1 + t * (p2 - p1)
 
-
     facetp = []
     rotateMatrix = trigeom.align_vectors(np.array(direction), [0,0,1])
     rotateMatrixInv = np.linalg.inv(rotateMatrix)
@@ -980,6 +974,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     mass_center_height = rm.transformmat4(rotateMatrix, mass_center)[2]
 
     for i in range(len(objtrimesh.faces)):
+
         vert0 = objtrimesh.vertices[objtrimesh.faces[i][0]]
         vert1 = objtrimesh.vertices[objtrimesh.faces[i][1]]
         vert2 = objtrimesh.vertices[objtrimesh.faces[i][2]]
@@ -987,7 +982,9 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         vert0p = rm.transformmat4(rotateMatrix, vert0)
         vert1p = rm.transformmat4(rotateMatrix, vert1)
         vert2p = rm.transformmat4(rotateMatrix, vert2)
+
         facep = Polygon([vert0p[:2], vert1p[:2], vert2p[:2]])
+        
         if facep.area == 0.0:
             continue
         else:
@@ -996,7 +993,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     facetp = cascaded_union(facetp).buffer(-10)
 
     if not type(facetp) == Polygon:
-        return [], []
+        return [], [], [], []
 
     # need to remove the point which is too close to its previous one
     faceSide = []
@@ -1006,13 +1003,12 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
             faceSide.append(facetp.exterior.coords[p])
 
     
-    verts2d = None
+    verts2d = []
 
     if len(faceSide) <= 3:
          verts2d = faceSide
     else:
         # remove the straight angle of the polygon
-        verts2d = []
         for p in range(len(faceSide)): # remind: the first point and the last point is the same point
             if p == 0:
                 if not inSameLine(faceSide[-1], faceSide[0], faceSide[1]):
@@ -1022,8 +1018,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
                     verts2d.append(faceSide[p])
             elif not inSameLine(faceSide[p-1], faceSide[p], faceSide[p+1]):
                 verts2d.append(faceSide[p])
-
-        verts2d.append(verts2d[0])
 
     ffdirections = []
     heights = []
@@ -1038,17 +1032,17 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         # find the two support point
         lowestPivotPoint = None
         highestPivotPoint = None
-        for i in range(len(objtrimesh.faces)):
-            for j in range(3):
-                vertp = rm.transformmat4(rotateMatrix, objtrimesh.vertices[objtrimesh.faces[i][j]])
-                if np.linalg.norm(vertp[:2] - verts2d[p+1][:2]) < 2.0:
-                    if lowestPivotPoint == None and highestPivotPoint == None:
-                        lowestPivotPoint = vertp[2]
-                        highestPivotPoint = vertp[2]
-                    if vertp[2] > highestPivotPoint:
-                        highestPivotPoint = vertp[2]
-                    if vertp[2] < lowestPivotPoint:
-                        lowestPivotPoint = vertp[2]
+
+        for meshvert in objtrimesh.vertices:
+            vertp = rm.transformmat4(rotateMatrix, meshvert)
+            if np.linalg.norm(vertp[:2] - verts2d[p+1][:2]) < 2.0:
+                if lowestPivotPoint == None and highestPivotPoint == None:
+                    lowestPivotPoint = vertp[2]
+                    highestPivotPoint = vertp[2]
+                if vertp[2] > highestPivotPoint:
+                    highestPivotPoint = vertp[2]
+                if vertp[2] < lowestPivotPoint:
+                    lowestPivotPoint = vertp[2]
 
         # if mass center is not between two support corner points, then this pivot corner is not stable
         isStablePivotPoint = lowestPivotPoint - 5 < mass_center_height and highestPivotPoint + 5 > mass_center_height
@@ -1059,7 +1053,8 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         interaction = nearest_points(line_2d, mass_center_2d)[0]
         ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
         # if the mass center does not project onto the line, the ignore it
-        if (interaction == verts2d[p] or interaction == verts2d[p+1]) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
+        #TODO
+        if (isClose([interaction.x,interaction.y], verts2d[p], 1.0) or isClose([interaction.x,interaction.y], verts2d[p+1], 1.0)) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
             if p == 0:
                 isFirstPlacementStable = False
                 pivotpoints.append([])
@@ -1085,7 +1080,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         ffdirection = rm.transformmat4(rotateMatrixInv, ffdirection)[:3]
         
         ffdirections.append(ffdirection)
-
 
     ffplacements = []
     for f in range(len(ffdirections)):

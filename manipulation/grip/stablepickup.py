@@ -432,6 +432,8 @@ class StablePickupPlanner(object):
             # ffdirections is the placement direction in the object frame
             # rotate corners are the rotate corners in the object frame
             _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
+            if len(ffdirections) == 0:
+                continue
             ffdirectionsMat = np.stack(ffdirections)
 
             manipulationPlaneXAxisMat = (np.array([
@@ -873,7 +875,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

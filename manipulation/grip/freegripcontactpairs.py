@@ -721,8 +721,9 @@ if __name__=='__main__':
     # objpath = os.path.join(this_dir, "objects", "planerearstay.stl")
     # objpath = os.path.join(this_dir, "objects", "sandpart.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
-    freegriptst = FreegripContactpairs(objpath)
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    freegriptst = FreegripContactpairs(objpath, numberOfSamplingPoints=100)
     print(len(freegriptst.objtrimesh.faces))
     # freegriptst.objtrimesh.show()
 
@@ -736,5 +737,5 @@ if __name__=='__main__':
                         togglesamples_refcls=False, togglenormals_refcls=False, alpha = 1)
 
     for p in range(freegriptst.facetpairs.shape[0]):
-        freegriptst.pairShow(base, False, True)
+        freegriptst.pairShow(base, True, True)
     base.run()
