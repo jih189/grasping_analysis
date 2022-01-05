@@ -59,7 +59,6 @@ class dexterousManipulationGraph:
             for i in range(len(angle_range)):
                 helper_nodes_cnt.append(tmp)
                 tmp += len(angle_range[i])
-            
             for i in range(0,len(edges)):
                 e1 = helper_nodes_cnt[ edges[i][0][0] ] + edges[i][0][1]
                 e2 = helper_nodes_cnt[ edges[i][1][0] ] + edges[i][1][1]
@@ -481,9 +480,13 @@ class ff_regrasp_planner(object):
         # get all contact point pair relative to current placement
         contactpoint0s = self.gripsOfPlacement[placementid][2]
         contactpoint1s = self.gripsOfPlacement[placementid][3]
+
+        print("for placement ", placementid)
+        print("we have")
         
         # ensure there are no duplicated contact point pairs
         for c0, c1 in zip(contactpoint0s, contactpoint1s):
+            print(c0, c1)
             isNew = True
             for r in point_pairs:
                 if np.linalg.norm(r[0] - c0) < 0.1 and np.linalg.norm(r[1] - c1) < 0.1:
@@ -518,7 +521,7 @@ class ff_regrasp_planner(object):
 
         # recalculate the plane, ensure grasps stay into the same plane
         for i in range(len(plane_lists_temp)):
-            if len(plane_of_point_pairs_list[i]) <= 2:
+            if len(plane_of_point_pairs_list[i]) < 1:
                 continue
             average_plane_normal = np.mean(np.array(plane_of_point_pairs_list[i]), axis=0)
             average_plane_normal[3:] = average_plane_normal[3:] / np.linalg.norm(average_plane_normal[3:])
@@ -553,7 +556,7 @@ class ff_regrasp_planner(object):
         angleMask = []
         
         for c0, c1 in point_pairs_temp:
-            if self.getAngleBetweenDirection(c1-c0, plane_normal) < 1.59:
+            if self.getAngleBetweenDirection(c1-c0, plane_normal) < (np.pi/2):
                 tmp = c0
                 c0 = c1
                 c1 = tmp
@@ -627,9 +630,13 @@ class ff_regrasp_planner(object):
         for i in range(len(grasp_point_pairs)):
             grasp_points_2d.append(rm.transformmat4(rotateMatrix, grasp_point_pairs[i][0])[:2])
         grasp_points_2d = np.array(grasp_points_2d)
-        vor = Voronoi(grasp_points_2d)
 
-        return vor.ridge_points
+        if grasp_points_2d.shape[0] > 2:
+            return Voronoi(grasp_points_2d).ridge_points
+        elif grasp_points_2d.shape[0] == 2:
+            return np.array([[0, 1]])
+        elif grasp_points_2d.shape[0] == 1:
+            return np.array([[0, 0]])
 
     def getCommonBit(self, mask1, mask2):
         result = False

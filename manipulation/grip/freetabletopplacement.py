@@ -156,9 +156,9 @@ class FreeTabletopPlacement(object):
 
         # cluster grasps according to the plane
         for f in range(len(self.freegripnormals)):
-            _, ind = self.tpsdirections.query(mapParallelDirection(self.freegripnormals[f][0]))
+            _, ind = self.tpsdirections.query(mapParallelDirection(self.freegriprotmats[f].getRow(1)))
             if len(self.tpshasgrasp[ind]) == 0:
-                newFreegripnormals = mapParallelDirection(self.freegripnormals[f][0])
+                newFreegripnormals = mapParallelDirection(self.freegriprotmats[f].getRow(1))
                 accuracyDirect[ind][0] = newFreegripnormals[0]
                 accuracyDirect[ind][1] = newFreegripnormals[1]
                 accuracyDirect[ind][2] = newFreegripnormals[2]
