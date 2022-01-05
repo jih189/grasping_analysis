@@ -649,8 +649,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

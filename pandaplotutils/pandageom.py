@@ -1002,6 +1002,8 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         if not isClose(facetp.exterior.coords[p], facetp.exterior.coords[p+1], 0.1):
             faceSide.append(facetp.exterior.coords[p])
 
+    faceSide.append(faceSide[0])
+
     
     verts2d = []
 
@@ -1053,7 +1055,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         interaction = nearest_points(line_2d, mass_center_2d)[0]
         ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
         # if the mass center does not project onto the line, the ignore it
-        #TODO
+        # print("interaction ", interaction.x, " ", interaction.y, " with ", verts2d[p], " and ", verts2d[p+1])
         if (isClose([interaction.x,interaction.y], verts2d[p], 1.0) or isClose([interaction.x,interaction.y], verts2d[p+1], 1.0)) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
             if p == 0:
                 isFirstPlacementStable = False
@@ -1087,6 +1089,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         rotplacement = trigeom.align_vectors(ffdirections[f], [0,0,-1])
         rotplacement[2,3] = heights[f]
         ffplacements.append(rotplacement)
+
 
     pivotPlacements = []
     for p in pivotpoints:

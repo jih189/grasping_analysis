@@ -465,7 +465,7 @@ class ff_regrasp_planner(object):
         return poseTrajectory
 
     # the plane is represneted by (x,y,z,nx,ny,nz) where nx,ny,nz is the normal vector of the plane
-    def isSamePlane(self, plane1, plane2, threshold = 2.0):
+    def isSamePlane(self, plane1, plane2, threshold = 3.0):
         if plane1[3] * (plane2[0] - plane1[0]) + plane1[4] * (plane2[1] - plane1[1]) + plane1[5] * (plane2[2] - plane1[2]) < threshold \
             and plane2[3] * (plane1[0] - plane2[0]) + plane2[4] * (plane1[1] - plane2[1]) + plane2[5] * (plane1[2] - plane2[2]) < threshold \
             and np.linalg.norm(plane1[3:] - plane2[3:]) < 0.3:
@@ -480,13 +480,9 @@ class ff_regrasp_planner(object):
         # get all contact point pair relative to current placement
         contactpoint0s = self.gripsOfPlacement[placementid][2]
         contactpoint1s = self.gripsOfPlacement[placementid][3]
-
-        print("for placement ", placementid)
-        print("we have")
         
         # ensure there are no duplicated contact point pairs
         for c0, c1 in zip(contactpoint0s, contactpoint1s):
-            print(c0, c1)
             isNew = True
             for r in point_pairs:
                 if np.linalg.norm(r[0] - c0) < 0.1 and np.linalg.norm(r[1] - c1) < 0.1:
