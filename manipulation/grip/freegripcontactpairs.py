@@ -362,6 +362,7 @@ class FreegripContactpairs(object):
                 continue
             # check if the faces are opposite and parallel
             dotnorm = np.dot(self.facetnormals[facetpair[0]], self.facetnormals[facetpair[1]])
+            # here can have some improve TODO
             if dotnorm < -0.95:
                 # check if any samplepnts's projection from facetpairs[i][0] falls in the polygon of facetpairs[i][1]
                 facet0pnts = self.objsamplepnts_refcls[facetpair[0]]

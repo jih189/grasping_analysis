@@ -28,7 +28,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         :param torqueresist: the maximum allowable distance to com (see FreegripContactpairs.planContactpairs)
         """
 
-        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=20, readser=readser)
+        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=100, readser=readser)
         if readser is False:
             # use this one to set the max and min distance from fingertips to the boundary
             # self.removeBadSamples(mindist=1, maxdist=25)

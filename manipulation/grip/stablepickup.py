@@ -2,6 +2,7 @@
 import sys
 import os
 import numpy as np
+from numpy.lib.function_base import place
 
 from direct.showbase import DirectObject
 
@@ -34,6 +35,7 @@ from scipy.spatial.transform import Rotation as R
 
 from direct.task import Task
 from time import sleep
+import matplotlib.pyplot as plt
 
 # fibonacci sphere points generator
 def fibonacci_sphere(samples=100):
@@ -85,7 +87,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.validangle = 0.2
+        self.validangle = 0.5
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -129,6 +131,7 @@ class StablePickupPlanner(object):
         if freetabletopplacementdata is None:
             raise ValueError("Plan the freeairgrip first!")
         self.tpsmat4s, self.placementid, self.placementtype = freetabletopplacementdata
+        self.placementdirections = [pg.getGroundDirection(pg.mat4ToNp(p)) for p in self.tpsmat4s]
 
     def randomlyPickOneGrasp(self):
         """
@@ -209,12 +212,13 @@ class StablePickupPlanner(object):
 
         possibleplacements, possibleplacementdirections, rotatecorners, tempplacements = pg.generateFFPlacement(self.objtrimeshconv, 
                                                 currentfignerdirection, 
-                                                self.objcom, 0.9)
+                                                self.objcom, 0.3)
 
         rotatematrix = trigeom.align_vectors(currentfignerdirection, [0,0,1])
 
         currentplacementdirection2d = getAngleWithRotationMatrix(rotatematrix, pg.getGroundDirection(liftupPose_t))
         placementangles = [getAngleWithRotationMatrix(rotatematrix, possibleplacementdirections[p]) for p in range(len(possibleplacementdirections))]
+
         twonearplacementdirectionindex = findWhichRangeDirectionBelongto(placementangles, currentplacementdirection2d)
 
         pivotingplacements = [possibleplacements[twonearplacementdirectionindex[0]]] + tempplacements[twonearplacementdirectionindex[0]] + [possibleplacements[twonearplacementdirectionindex[1]]]
@@ -366,6 +370,7 @@ class StablePickupPlanner(object):
     def generateManipulationPlane(self):
         '''
         According to the object mesh, it will generate a set of manipulation plane with contact points on it
+        However, there will be no opposite plane in this case for now.
         '''
 
         # use a fibonacci method to generate a set of direction in 2d
@@ -420,18 +425,25 @@ class StablePickupPlanner(object):
                 return dmgid
         return None    
 
-    def generateManipulationCircle(self, fingerdirections, contactpointInPlane, graspsIdInPlane):
+    def generateManipulationCircle(self, fingerdirections, graspsIdInPlane, base):
 
         placement2placement = []
         # according to all possible finger directions, a set of placements can be pivoted by that grasp
         # the placements is in a loop according to the fingertip direction
-        for fingerdirection, currentContactPoints, currentGraspsIds in zip(fingerdirections, contactpointInPlane, graspsIdInPlane):
+        for fingerdirection, currentGraspsIds in zip(fingerdirections, graspsIdInPlane):
+            if len(currentGraspsIds) == 0:
+                continue
+
+            currentGrasps = [pg.mat4ToNp(self.gdb.loadFreeAirGripByIds(gid)[0]) for gid in currentGraspsIds]
+            currentContactPoints = [c.dot(np.array([self.hand.contactPointOffset, 0, 0, 1])) for c in currentGrasps]
+
             # get all grasps belong to this finger direction
             graspsBelongToCurrentPlane = np.stack(currentContactPoints)[:, :3]
 
             # ffdirections is the placement direction in the object frame
             # rotate corners are the rotate corners in the object frame
-            _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.9)
+            _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.1)
+
             if len(ffdirections) == 0:
                 continue
             ffdirectionsMat = np.stack(ffdirections)
@@ -542,7 +554,6 @@ class StablePickupPlanner(object):
                         negativeplacement2nodeid = self.getdmgid(placement2poseid, (cct0-cct1)/np.linalg.norm(cct0-cct1))
                         placement2placement.append([positiveplacement1nodeid, positiveplacement2nodeid , placement1poseid, placement2poseid, positiveValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
                         placement2placement.append([negativeplacement1nodeid, negativeplacement2nodeid , placement1poseid, placement2poseid, negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
-
 
         return placement2placement
 
@@ -687,29 +698,67 @@ class StablePickupPlanner(object):
         diff = 2.0 
         closest_placementid = None
         closest_placementtype = None
-        for placementid, placementpose, placementtype in zip(self.placementid, self.tpsmat4s, self.placementtype):
-            placement_pose = pg.mat4ToNp(placementpose)
-            currnt_dir_pos = pg.getGroundDirection(placement_pose)
+        for placementid, placementtype, current_dir_pos in zip(self.placementid, self.placementtype, self.placementdirections):
             
-            currnt_diff = np.linalg.norm(currnt_dir_pos - obj_dir_pos_2match)
+            currnt_diff = np.linalg.norm(current_dir_pos - obj_dir_pos_2match)
             if currnt_diff <= diff:
                 closest_placementid = placementid
                 closest_placementtype = placementtype
                 diff = currnt_diff
         return closest_placementid, closest_placementtype
 
-    def createPlacementGraph(self):
+    def getConnectionsBetweenPlacements(self, placementdirections):
+        # TODO two opposite placements
+        import itertools
+        planepool = []
+        for p1, p2 in list(itertools.combinations(range(len(placementdirections)), 2)):
+            p1direction = placementdirections[p1]
+            p2direction = placementdirections[p2]
+            if p1direction.dot(p2direction) > 0.99 or p1direction.dot(p2direction) < -0.99:
+                continue
+            planedirection = np.dot(rm.hat(p1direction), p2direction)
+            planedirection = planedirection / np.linalg.norm(planedirection)
+            newplane = True
+            for p in planepool:
+                c = np.array([p[0][0], p[0][1], p[0][2]]).dot(planedirection)
+                if c > 0.99 or c < -0.99:
+                    newplane = False
+                    p.append([planedirection[0], planedirection[1], planedirection[2], p1, p2])
+            if newplane:
+                planepool.append([[planedirection[0], planedirection[1], planedirection[2], p1, p2]])
+
+        result = []
+        for p in range(len(planepool)):
+            result.append([planepool[p][0][:3], [placementdirections[d] for d in list(set([b for l in planepool[p] for b in l[3:5]]))]])
+        return result # [[plane normal, list of placement direction]]
+
+
+    def createPlacementGraph(self, base):
         '''
         create a pivoting graph
         '''
+        
 
         # self.Graph = nx.Graph()
         self.Graph = nx.DiGraph()
 
-        fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
+        # fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
+
+        planeDirectionAndPlacement = self.getConnectionsBetweenPlacements(self.placementdirections)
+        planegrasps = [[] for _ in range(len(planeDirectionAndPlacement))]
+
+        # # ground the grasps
+        for g in range(len(self.freegriprotmats)):
+            graspdirection = pg.mat4ToNp(self.freegriprotmats[g]).dot(np.array([0,1,0,1]))[:3] - pg.mat4ToNp(self.freegriprotmats[g]).dot(np.array([0,0,0,1]))[:3]
+            for p in range(len(planeDirectionAndPlacement)):
+                c = np.array(planeDirectionAndPlacement[p][0])
+                if c.dot(graspdirection) > 0.96 or c.dot(graspdirection) < -0.96:
+                    planegrasps[p].append(self.freegripid[g])
 
         # generate a list of pair valid pivot action
-        placement2placement = self.generateManipulationCircle(fingerdirections, contactpointInPlane, graspsIdInPlane)
+        placement2placement = self.generateManipulationCircle([t[0] for t in planeDirectionAndPlacement], planegrasps, base)
+        print("length of placement 2 placement")
+        print(len(placement2placement))
 
         # build the graph
         for p in placement2placement:
@@ -737,6 +786,15 @@ class StablePickupPlanner(object):
         targetplacementnodeid = targetPlacementid
         if targetPlacementtype == 1:
             targetplacementnodeid = self.getdmgid(targetPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
+
+        print("current placement node id ")
+        print(currrentplacementnodeid)
+        print("target placement node id")
+        print(targetplacementnodeid)
+        print(self.Graph)
+        #TODO
+        nx.draw(self.Graph, with_labels=True)
+        plt.show()
 
         path = nx.shortest_path(self.Graph, currrentplacementnodeid, targetplacementnodeid)
         for i in range(len(path)-1):
@@ -875,8 +933,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -897,7 +955,7 @@ if __name__ == '__main__':
 
     placedownPose, liftuptrajectoryplacement, liftuptrajectorycorners, liftupfingerdirection = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
 
-    pickup_planner.createPlacementGraph()
+    pickup_planner.createPlacementGraph(base)
 
     # find the pivot action sequence
     pivotActionSequence = pickup_planner.getPivotPath(initial_placement, input_grasp, placedownPose, input_grasp)
