@@ -35,6 +35,7 @@ from scipy.spatial.transform import Rotation as R
 
 from direct.task import Task
 from time import sleep
+
 import matplotlib.pyplot as plt
 
 # fibonacci sphere points generator
@@ -140,7 +141,7 @@ class StablePickupPlanner(object):
         """
         random_index = random.randint(0, len(self.freegripid))
         # random_index = 273
-        # random_index = 456
+        # random_index = 292
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -738,7 +739,6 @@ class StablePickupPlanner(object):
         create a pivoting graph
         '''
         
-
         # self.Graph = nx.Graph()
         self.Graph = nx.DiGraph()
 
@@ -757,14 +757,14 @@ class StablePickupPlanner(object):
 
         # generate a list of pair valid pivot action
         placement2placement = self.generateManipulationCircle([t[0] for t in planeDirectionAndPlacement], planegrasps, base)
-        print("length of placement 2 placement")
-        print(len(placement2placement))
 
         # build the graph
         for p in placement2placement:
             self.Graph.add_edge(p[0], p[1], placementid0=p[2], placementid1=p[3], pivotGraspids=p[4], pivotCorner=p[5])
             # flip the rotate orders
             self.Graph.add_edge(p[1], p[0], placementid0=p[3], placementid1=p[2], pivotGraspids=p[4], pivotCorner=(np.flip(p[5][0], 0), p[5][1], list(reversed(p[5][2]))))
+
+        
 
     def getPivotPath(self, currentPlacement, currentGrasp, targetPlacement, targetGrasp):
         result = []
@@ -782,19 +782,15 @@ class StablePickupPlanner(object):
         cct0 = self.getPointFromPose(pg.cvtMat4np4(targetGrasp[0]) * pg.cvtMat4np4(targetPlacement), cct0)
         cct1 = self.getPointFromPose(pg.cvtMat4np4(targetGrasp[0]) * pg.cvtMat4np4(targetPlacement), cct1)
 
+
         targetPlacementid, targetPlacementtype = self.getPlacementIdFromPose(targetPlacement)
         targetplacementnodeid = targetPlacementid
         if targetPlacementtype == 1:
             targetplacementnodeid = self.getdmgid(targetPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
 
-        print("current placement node id ")
-        print(currrentplacementnodeid)
-        print("target placement node id")
-        print(targetplacementnodeid)
-        print(self.Graph)
-        #TODO
-        nx.draw(self.Graph, with_labels=True)
-        plt.show()
+        # nx.draw(self.Graph, with_labels=True)
+        # plt.show()
+        # return None
 
         path = nx.shortest_path(self.Graph, currrentplacementnodeid, targetplacementnodeid)
         for i in range(len(path)-1):
@@ -933,8 +929,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

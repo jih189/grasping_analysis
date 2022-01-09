@@ -287,6 +287,7 @@ class FreeTabletopPlacement(object):
         self.tpsgripidfreeair = []
 
         for i in range(len(self.tpsmat4s)):
+
             self.tpsgripcontacts.append([])
             self.tpsgripnormals.append([])
             self.tpsgriprotmats.append([])

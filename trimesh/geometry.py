@@ -49,6 +49,21 @@ def transform_around(matrix, point):
     result = np.dot(translate, result)
     return result
 
+def random_three_vector():
+    """
+    Generates a random 3D unit vector (direction) with a uniform spherical distribution
+    Algo from http://stackoverflow.com/questions/5408276/python-uniform-spherical-distribution
+    :return:
+    """
+    phi = np.random.uniform(0,np.pi*2)
+    costheta = np.random.uniform(-1,1)
+
+    theta = np.arccos( costheta )
+    x = np.sin( theta) * np.cos( phi )
+    y = np.sin( theta) * np.sin( phi )
+    z = np.cos( theta )
+    return np.array([x,y,z])
+
 def align_vectors(vector_start, vector_end, return_angle=False):
     '''
     Returns the 4x4 transformation matrix which will rotate from 
@@ -66,12 +81,19 @@ def align_vectors(vector_start, vector_end, return_angle=False):
             return T, angle
         return T
     if np.array_equal(-vector_start, vector_end):
-        T = np.eye(4)
-        T[:3, 2] *= -1.0
-        T[:3, 1] *= -1.0
-        angle = np.pi
+
+        # randomly find a vector which is perpendicular to the vect_start
+        random_vector = random_three_vector()
+
+        while np.array_equal(random_vector, vector_start) or np.array_equal(-random_vector, vector_start):
+            random_vector = random_three_vector()
+        
+        rotateAxis = np.cross(vector_start, random_vector)
+        rotateAxis = rotateAxis / np.linalg.norm(rotateAxis)
+
+        T = rotation_matrix(np.pi, rotateAxis)
         if return_angle:
-            return T, angle
+            return T, np.pi
         return T
 
     vector_start = unitize(vector_start)
