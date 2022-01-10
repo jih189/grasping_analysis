@@ -716,8 +716,14 @@ class ff_regrasp_planner(object):
                     isConnect, commonBit = self.getCommonBit(angleMask[idx1][i], angleMask[idx2][j]) # we may also store the common edges grasps
 
                     if isConnect:
-                        angleRange_edges.append(((idx1, i),(idx2,j),commonBit))
-        
+                        firstlist = [a for a, b in enumerate(angleMask[idx1][i]) if b]
+                        secondlist = [a for a, b in enumerate(angleMask[idx2][j]) if b]
+                        if self.checkCollisionBetweenGrasps(startGrasp=pg.mat4ToNp(angleSet[idx1][firstlist[commonBit[0]]]), goalGrasp=pg.mat4ToNp(angleSet[idx2][secondlist[commonBit[1]]]), jawwidth=100, base=base):
+                            # firstpoint = self.getPointFromPose(angleSet[idx1][firstlist[commonBit[0]]], Point3(self.hand.contactPointOffset, 0, 0))
+                            # secondpoint = self.getPointFromPose(angleSet[idx2][secondlist[commonBit[1]]], Point3(self.hand.contactPointOffset, 0, 0))
+                            # pandageom.plotLinesegs(base.render, np.array([[firstpoint[0], firstpoint[1], firstpoint[2]],[secondpoint[0], secondpoint[1], secondpoint[2]]]))
+                            angleRange_edges.append(((idx1, i),(idx2,j),commonBit))
+
         angleRange_list = [[] for _ in range(len(angleMask))]
 
         # generate angle ranges
@@ -744,6 +750,7 @@ class ff_regrasp_planner(object):
         # print("number of placement = ", len(self.tpsmat4s))
         self.regrasp_graph = [[] for _ in range(len(self.tpsmat4s))]
         for placementid, placement in enumerate(tqdm(self.tpsmat4s)):
+
 
             # need to group grasp point pairs by plane in one placement
             # i-th list of point pairs list is all contact point pair in the i-th motion plane.

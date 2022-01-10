@@ -140,7 +140,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 273
+        # random_index = 382
         # random_index = 292
         print("random index ", random_index)
 

@@ -20,6 +20,7 @@ if __name__ == '__main__':
     gdb = db.GraspDB()
     regrasp_planner = ff_regrasp_planner(objpath, handpkg, gdb)
     regrasp_planner.build_regrasp_graph_for_all_placements(base)
+
     for placementid in range(len(regrasp_planner.regrasp_graph)):
         print("for placement ", placementid, ", the number of plane is ", len(regrasp_planner.regrasp_graph[placementid]))
     regrasp_planner.saveToDB()
