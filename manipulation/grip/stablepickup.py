@@ -140,7 +140,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 382
+        random_index = 15
         # random_index = 292
         print("random index ", random_index)
 
@@ -153,7 +153,8 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        # random_placement_index = 1
+        print("number of possible placements of this grasp ", len(result))
+        random_placement_index = 1
         # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
@@ -177,14 +178,15 @@ class StablePickupPlanner(object):
         There are two cases. First, all ground contact point, mass center, and hand contact point are on the 
         same line. The second case is that they are not on the same line.
         '''
-        liftupPose = pg.cvtMat4np4(liftupPose_t)
         grasppose = pg.cvtMat4np4(grasppose_t)
+        liftuppose_direction = pg.getGroundDirection(liftupPose_t)
 
         def getAngleWithRotationMatrix(rotatematrix_, direction_):
             temp = rm.transformmat4(rotatematrix_, direction_)
             return np.arctan2(temp[1], temp[0])
 
         def findWhichRangeDirectionBelongto(anglelist, direction):
+
             maxindex = np.argmax(anglelist)
             minindex = np.argmin(anglelist)
             if direction > anglelist[maxindex] or direction < anglelist[minindex]:
@@ -209,15 +211,18 @@ class StablePickupPlanner(object):
         # in this section , we first find both ff or stable placement which are on the both side of current lifted up pose
         # then find the all corner points between this two placements, so we can find how to rotate to both way
 
-        currentfignerdirection = np.array(self.getPointFromPose(grasppose, Point3(0, 1, 0)) - self.getPointFromPose(grasppose, Point3(0, 0, 0)))
+
+        closestPlacementDirection = self.placementdirections[np.argmin(np.linalg.norm(np.array(self.placementdirections) - liftuppose_direction, axis=1))]
+        liftupplanedirection = np.cross(closestPlacementDirection, liftuppose_direction)
+        liftupplanedirection = liftupplanedirection / np.linalg.norm(liftupplanedirection)
 
         possibleplacements, possibleplacementdirections, rotatecorners, tempplacements = pg.generateFFPlacement(self.objtrimeshconv, 
-                                                currentfignerdirection, 
+                                                liftupplanedirection, 
                                                 self.objcom, 0.3)
 
-        rotatematrix = trigeom.align_vectors(currentfignerdirection, [0,0,1])
+        rotatematrix = trigeom.align_vectors(liftupplanedirection, [0,0,1])
 
-        currentplacementdirection2d = getAngleWithRotationMatrix(rotatematrix, pg.getGroundDirection(liftupPose_t))
+        currentplacementdirection2d = getAngleWithRotationMatrix(rotatematrix, liftuppose_direction)
         placementangles = [getAngleWithRotationMatrix(rotatematrix, possibleplacementdirections[p]) for p in range(len(possibleplacementdirections))]
 
         twonearplacementdirectionindex = findWhichRangeDirectionBelongto(placementangles, currentplacementdirection2d)
@@ -733,7 +738,6 @@ class StablePickupPlanner(object):
             result.append([planepool[p][0][:3], [placementdirections[d] for d in list(set([b for l in planepool[p] for b in l[3:5]]))]])
         return result # [[plane normal, list of placement direction]]
 
-
     def createPlacementGraph(self, base):
         '''
         create a pivoting graph
@@ -929,8 +933,8 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -950,6 +954,7 @@ if __name__ == '__main__':
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
 
     placedownPose, liftuptrajectoryplacement, liftuptrajectorycorners, liftupfingerdirection = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
+
 
     pickup_planner.createPlacementGraph(base)
 
