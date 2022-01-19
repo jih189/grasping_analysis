@@ -867,8 +867,11 @@ class ff_regrasp_planner(object):
 
         return None, None
 
-    # This function will read numpy pose matrix
     def getTrajectory(self, _init_grasp, _target_grasp, jawwidth, _placement, base):
+        """
+        Given the initial grasp and target grasp with jawwidth in the object frame, so it can
+        plan the trajectory from intial to target. The input is Numpy format
+        """
 
         # get the matching object placement pose
         placementid = self.getPlacementId(_placement)

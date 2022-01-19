@@ -2,7 +2,7 @@ import numpy as np
 import os
 from panda3d.core import *
 from utils import robotmath as rm
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 from shapely.geometry import Point
 from shapely.geometry import LineString
 from shapely.ops import nearest_points
@@ -964,7 +964,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         t = np.sum((p3 - p1) * (p2 - p1)) / l2
 
         return p1 + t * (p2 - p1)
-
+    
     facetp = []
     rotateMatrix = trigeom.align_vectors(np.array(direction), [0,0,1])
     rotateMatrixInv = np.linalg.inv(rotateMatrix)
@@ -991,10 +991,12 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
             facetp.append(facep.buffer(10))
 
     facetp = cascaded_union(facetp).buffer(-10)
-
-    if not type(facetp) == Polygon:
+    if type(facetp) == MultiPolygon:
+        # for some unknow reason, the merged shape is not a simple polygon, so we need to select the poly with maximum area
+        facetp = list(facetp)[np.argmax(np.array([p.area for p in list(facetp)]))]
+    elif not type(facetp) == Polygon:
         return [], [], [], []
-
+        
     # need to remove the point which is too close to its previous one
     faceSide = []
 
@@ -1004,7 +1006,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
 
     faceSide.append(faceSide[0])
 
-    
     verts2d = []
 
     if len(faceSide) <= 3:
@@ -1027,6 +1028,10 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     pivotpoints = []
 
     isFirstPlacementStable = True
+
+    # xs = []
+    # ys = []
+    # plt.figure()
     
     # calculate the ff direction
     for p in range(len(verts2d) - 1):
@@ -1051,11 +1056,16 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         
         line_2d = LineString([verts2d[p], verts2d[p+1]])
         
+        # xs.append(verts2d[p][0])
+        # ys.append(verts2d[p][1])
+        
         # nearest_points will return the nearest point on line_2d to mass center 
         interaction = nearest_points(line_2d, mass_center_2d)[0]
         ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
+
+        
+
         # if the mass center does not project onto the line, the ignore it
-        # print("interaction ", interaction.x, " ", interaction.y, " with ", verts2d[p], " and ", verts2d[p+1])
         if (isClose([interaction.x,interaction.y], verts2d[p], 1.0) or isClose([interaction.x,interaction.y], verts2d[p+1], 1.0)) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
             if p == 0:
                 isFirstPlacementStable = False
@@ -1067,7 +1077,7 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
                 pivotpoints[-1] += pivotpoints[0]
                 pivotpoints.pop(0)
             continue
-
+        
         # for next pivot group
         pivotpoints.append([[rm.transformmat4(rotateMatrixInv, [verts2d[p+1][0], verts2d[p+1][1], 0])[:3], isStablePivotPoint]])
 
@@ -1076,6 +1086,8 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
             pivotpoints.pop(0)
 
         heights.append(np.linalg.norm(ffdirection))
+
+        # plt.plot([0, ffdirection[0]], [0, ffdirection[1]])
          
         ffdirection = ffdirection / np.linalg.norm(ffdirection)
 
@@ -1083,13 +1095,16 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         
         ffdirections.append(ffdirection)
 
+
     ffplacements = []
     for f in range(len(ffdirections)):
         ffdirections[f][abs(ffdirections[f]) < 1e-12] = 0.0 # handle the case align_vectors has two invert directions
         rotplacement = trigeom.align_vectors(ffdirections[f], [0,0,-1])
         rotplacement[2,3] = heights[f]
         ffplacements.append(rotplacement)
-
+        
+    # plt.plot(xs, ys)
+    # plt.show()
 
     pivotPlacements = []
     for p in pivotpoints:
