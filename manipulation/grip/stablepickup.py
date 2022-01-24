@@ -825,8 +825,6 @@ class StablePickupPlanner(object):
             result.append([self.Graph.get_edge_data(path[i],path[i+1])['placementid0'], self.Graph.get_edge_data(path[i],path[i+1])['placementid1'], self.Graph.get_edge_data(path[i],path[i+1])['pivotGraspids'], self.Graph.get_edge_data(path[i],path[i+1])['pivotCorner']])
         return result
 
-
-
 class DemoHelper(DirectObject.DirectObject):
     def __init__(self, objpath, handpkg, _base):
         objtrimesh=trimesh.load_mesh(objpath)
@@ -855,6 +853,10 @@ class DemoHelper(DirectObject.DirectObject):
         self.accept('w', self.executeEvent)
 
         self.initialHandPose = None
+        self.savedGrasp = None
+    
+    def setSavedGrasp(self, grasp):
+        self.savedGrasp = (grasp[0].copy(), grasp[1])
 
     def setObjPose(self, placementPose):
         """
@@ -955,6 +957,9 @@ class DemoHelper(DirectObject.DirectObject):
         json_string = json.dumps(data)
         with open('json_data.json', 'w') as outfile:
             outfile.write(json_string)
+        json_string = json.dumps(self.savedGrasp[0].tolist())
+        with open('grasp_json_data.json', 'w') as outfile:
+            outfile.write(json_string)
 
     def executeEvent(self):
         if len(taskMgr.getDoLaters()) > 0:
@@ -1010,6 +1015,9 @@ if __name__ == '__main__':
     # randomly get a initial grasp
     input_grasp, initial_placement = pickup_planner.randomlyPickOneGrasp()
 
+    # set the initial grasp to demo
+    demoHelper.setSavedGrasp(input_grasp)
+
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
 
     placedownPose, liftuptrajectoryplacement, liftuptrajectorycorners, liftupfingerdirection = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
@@ -1057,10 +1065,10 @@ if __name__ == '__main__':
         if pivotCornerPoint[0].shape[0] > 1: # when the pivoting edge is not sharp
 
             rotatedplacementposelist = [placement1pose] + pivotCornerPoint[2] + [placement2pose]
+            demoHelper.addEvent("closeGripper", 0)
             for l in range(pivotCornerPoint[0].shape[0]):
                 # pivoting
                 pivotTrajectory = [currentplacement.dot(np.linalg.inv(rotatedplacementposelist[l])).dot(p) for p in pickup_planner.getPivotTrajectory(rotatedplacementposelist[l], rotatedplacementposelist[l+1], [pivotCornerPoint[0][l], pivotCornerPoint[1]])]
-                demoHelper.addEvent("closeGripper", 0)
                 demoHelper.addEvent("pivot", pivotTrajectory)
                 currentgrasp = [next_grasp, next_jawwidth]
                 currentplacement = pivotTrajectory[-1]
@@ -1084,10 +1092,10 @@ if __name__ == '__main__':
             demoHelper.addEvent("setGripper", input_grasp[1])
             demoHelper.addEvent("fingerGait", poseTrajectory)
 
+        demoHelper.addEvent("closeGripper", 0)
         liftuptrajectoryplacement.append(liftuppose)
         for s in range(len(liftuptrajectorycorners)):
             pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
-            demoHelper.addEvent("closeGripper", 0)
             demoHelper.addEvent("pivot", pivotTrajectory)
             currentplacement = pivotTrajectory[-1]
             
@@ -1122,6 +1130,6 @@ if __name__ == '__main__':
     axis.setScale(10)
     axis.reparentTo(base.render)
 
-    # demoHelper.saveEvent()
+    demoHelper.saveEvent()
 
-    base.run()
+    # base.run()
