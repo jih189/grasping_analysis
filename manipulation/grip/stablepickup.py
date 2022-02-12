@@ -938,6 +938,9 @@ class DemoHelper(DirectObject.DirectObject):
         return task.again
 
     def saveEvent(self):
+        """
+        Save the end-effector trajectory and how the object should be grasp at the beginning
+        """
         data = [("init", [self.initialHandPose.tolist()])]
         lastHandPose = self.initialHandPose
         for action, trajectory in self.eventQueue:
@@ -1132,4 +1135,4 @@ if __name__ == '__main__':
 
     demoHelper.saveEvent()
 
-    # base.run()
+    base.run()

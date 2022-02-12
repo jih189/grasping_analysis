@@ -115,7 +115,6 @@ class FreeTabletopPlacement(object):
         self.tpsgripcontacts = None
         self.tpsgripnormals = None
         self.tpsgripjawwidth = None
-        self.tpsdirections = None # a set of possible grasp directions
         self.tpsffplacements = None
         self.tpsffgrips = None
         self.stableplacementdirections = None
@@ -127,6 +126,9 @@ class FreeTabletopPlacement(object):
 
         self.gdb = gdb
         self.loadFreeAirGrip()
+
+    # def line_vector_clustering(self, vectors):
+    #     for v in vectors:
 
     def genFixturelessPlacement(self):
         '''
@@ -142,6 +144,7 @@ class FreeTabletopPlacement(object):
         self.grounddirection_temp = []
         self.tpsffgrips = []
 
+
         # use a fibonacci method to generate a set of direction in 2d
         angleMap = []
         for t in fibonacci_sphere(642):
@@ -152,33 +155,44 @@ class FreeTabletopPlacement(object):
         accuracyDirect = np.zeros((len(angleMap), 3))
 
         # build the kd tree of the direction sets
-        self.tpsdirections = KDTree(np.array(angleMap))
+        tpsdirections = KDTree(np.array(angleMap))
 
         # cluster grasps according to the plane
         for f in range(len(self.freegripnormals)):
-            _, ind = self.tpsdirections.query(mapParallelDirection(self.freegriprotmats[f].getRow(1)))
+            _, ind = tpsdirections.query(np.array(self.freegriprotmats[f].getRow(1))[:3])
             if len(self.tpshasgrasp[ind]) == 0:
-                newFreegripnormals = mapParallelDirection(self.freegriprotmats[f].getRow(1))
-                accuracyDirect[ind][0] = newFreegripnormals[0]
-                accuracyDirect[ind][1] = newFreegripnormals[1]
-                accuracyDirect[ind][2] = newFreegripnormals[2]
+                accuracyDirect[ind][0] = self.freegriprotmats[f].getCell(1, 0)
+                accuracyDirect[ind][1] = self.freegriprotmats[f].getCell(1, 1)
+                accuracyDirect[ind][2] = self.freegriprotmats[f].getCell(1, 2)
             self.tpshasgrasp[ind].append([self.freegriprotmats[f], 
                                           self.freegripjawwidth[f], 
                                           self.freegripid[f], 
                                           self.freegripnormals[f][0], 
                                           self.freegripnormals[f][1]])
 
+        # clustering the direction which are opposite to each other
         # fingeridrections keeps the pair(normal direction of a set of grasp, direction id)
         fingerdirections = []
         for n in range(len(self.tpshasgrasp)):
             if len(self.tpshasgrasp[n]) > 0:
-                fingerdirections.append((accuracyDirect[n], n))
+
+                closestIndex = None
+                for f, d in fingerdirections:
+                    if np.linalg.norm(f.dot(accuracyDirect[n])) > 0.99:
+                        closestIndex = d
+                        break
+                if not closestIndex == None:
+                    self.tpshasgrasp[closestIndex] += self.tpshasgrasp[n]
+                    self.tpshasgrasp[n] = []
+                else:
+                    fingerdirections.append((accuracyDirect[n], n))
+
         
         # search all stable placement direction
         stabledirectionbit = np.zeros(len(angleMap))
         for p in range(len(self.stableplacementdirections)):
             sp = (self.stableplacementdirections[p][0], self.stableplacementdirections[p][1], self.stableplacementdirections[p][2])
-            _, ind = self.tpsdirections.query(sp)
+            _, ind = tpsdirections.query(sp)
             stabledirectionbit[ind] += 1
 
         # according to all possible finger directions, calculate ff placement
@@ -186,7 +200,7 @@ class FreeTabletopPlacement(object):
             ffplacements, ffdirections, _, _ = pg.generateFFPlacement(self.objtrimeshconv, d, self.objcom, 0.9)
 
             for i in range(len(ffplacements)): # remove the placement which is already stable
-                _, ind = self.tpsdirections.query(ffdirections[i])
+                _, ind = tpsdirections.query(ffdirections[i])
                 if stabledirectionbit[ind] == 0:
                     self.tpsffplacements.append(pg.cvtMat4np4(ffplacements[i]))
                     self.grounddirection_temp.append(ffdirections[i])
@@ -330,9 +344,7 @@ class FreeTabletopPlacement(object):
 
                     if not result0.getNumContacts() and not result1.getNumContacts() and not result2.getNumContacts():
                         self.tpsgriprotmats[-1].append(tpsgriprotmat)
-
                         self.tpsgripcontacts[-1].append([cct0, cct1])
-
                         self.tpsgripnormals[-1].append([cctn0, cctn1])
                         self.tpsgripjawwidth[-1].append(jawwidth)
                         self.tpsgripidfreeair[-1].append(gripid)
@@ -340,7 +352,7 @@ class FreeTabletopPlacement(object):
                     self.hand.setJawwidth(initjawwidth)
             else:
                 for j, rotmat in enumerate(self.freegriprotmats):
-
+                    
                     tpsgriprotmat = rotmat * self.tpsmat4s[i]
                     
                     # check if the hand collide with tabletop
@@ -356,6 +368,7 @@ class FreeTabletopPlacement(object):
                     result1 = self.bulletworldhp1.contactTest(hndbullnode)
                     result2 = self.bulletworldhplowest.contactTest(hndbull_without_fingers_node)
                     if not result0.getNumContacts() and not result1.getNumContacts() and not result2.getNumContacts():
+                        
                         self.tpsgriprotmats[-1].append(tpsgriprotmat)
 
                         cct0, cct1 = self.hand.getFingerTips()
@@ -488,7 +501,7 @@ class FreeTabletopPlacement(object):
         """
 
         for i in range(len(self.tpsmat4s)):
-            if i == 0:
+            if i == 4:
                 objrotmat  = self.tpsmat4s[i]
                 # objrotmat.setRow(0, -objrotmat.getRow3(0))
                 rotzmat = Mat4.rotateMat(0, Vec3(0,0,1))
@@ -568,7 +581,7 @@ class FreeTabletopPlacement(object):
         :return:
         """
 
-        distanceBetweenObjects = 350
+        distanceBetweenObjects = 500
 
         numberOfPlacements = len(self.tpsmat4s)
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
@@ -589,11 +602,9 @@ class FreeTabletopPlacement(object):
 
             tx, ty = placementTable[i]
             objrotmat = self.tpsmat4s[i]
-            objrotmat.setCell(3,0,tx * distanceBetweenObjects)
-            objrotmat.setCell(3,1,ty * distanceBetweenObjects)
+            objrotmat.setCell(3,0,tx * distanceBetweenObjects + objrotmat.getCell(3,0))
+            objrotmat.setCell(3,1,ty * distanceBetweenObjects + objrotmat.getCell(3,1))
 
-            rotzmat = Mat4.rotateMat(0, Vec3(0,0,1))
-            objrotmat = objrotmat*rotzmat
             # show object
             geom = pg.packpandageom(self.objtrimesh.vertices,
                                     self.objtrimesh.face_normals,
@@ -611,11 +622,11 @@ class FreeTabletopPlacement(object):
             star.setMat(objrotmat)
             star.reparentTo(base.render)
 
-            pandageom.plotArrow(base.render, spos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)),
-                                    epos=self.getPointFromPose(objrotmat, Point3(self.grounddirection[i][0], self.grounddirection[i][1], self.grounddirection[i][2])),
-                                    length=100,
-                                    rgba=Vec4(0,0,1,1))
-
+            # pandageom.plotArrow(base.render, spos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)),
+            #                         epos=self.getPointFromPose(objrotmat, Point3(self.grounddirection[i][0], self.grounddirection[i][1], self.grounddirection[i][2])),
+            #                         length=100,
+            #                         rgba=Vec4(0,0,1,1))
+                    
             # show the gripers
             for j in range(len(self.tpsgriprotmats[i])):
                 
@@ -628,30 +639,30 @@ class FreeTabletopPlacement(object):
                 tmphnd.setMat(pandanpmat4 = hndrotmat)
                 tmphnd.setJawwidth(hndjawwidth)
                 
-                # cct0 = self.tpsgripcontacts[i][j][0]
-                # cct1 = self.tpsgripcontacts[i][j][1]
+                cct0 = self.tpsgripcontacts[i][j][0]
+                cct1 = self.tpsgripcontacts[i][j][1]
 
-                #pandageom.plotSphere(base.render, pos=Point3(cct0[0] + tx * distanceBetweenObjects, cct0[1] + ty * distanceBetweenObjects, cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
-                #pandageom.plotSphere(base.render, pos=Point3(cct1[0] + tx * distanceBetweenObjects, cct1[1] + ty * distanceBetweenObjects, cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
-                # pandageom.plotSphere(base.render, pos=Point3(cct0[0], cct0[1] , cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
-                # pandageom.plotSphere(base.render, pos=Point3(cct1[0], cct1[1] , cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
+                # pandageom.plotSphere(base.render, pos=Point3(cct0[0] + tx * distanceBetweenObjects, cct0[1] + ty * distanceBetweenObjects, cct0[2]), radius=5, rgba=Vec4(0,1,0,1))
+                # pandageom.plotSphere(base.render, pos=Point3(cct1[0] + tx * distanceBetweenObjects, cct1[1] + ty * distanceBetweenObjects, cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
+
                 tmphnd.reparentTo(base.render)
+                
 
 
 if __name__ == '__main__':
 
-    base = pandactrl.World(camp=[700,300,1400], lookatp=[0,0,0])
+    base = pandactrl.World(camp=[1400,600,2800], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
     # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -667,17 +678,17 @@ if __name__ == '__main__':
     tps.gentpsgrip(base)
     tps.saveToDB()
     
-    bullcldrnp = base.render.attachNewNode("bulletcollider")
-    debugNode = BulletDebugNode('Debug')
-    debugNode.showWireframe(True)
-    debugNode.showConstraints(True)
-    debugNode.showBoundingBoxes(True)
-    debugNP = bullcldrnp.attachNewNode(debugNode)
-    debugNP.show()
+    # bullcldrnp = base.render.attachNewNode("bulletcollider")
+    # debugNode = BulletDebugNode('Debug')
+    # debugNode.showWireframe(True)
+    # debugNode.showConstraints(True)
+    # debugNode.showBoundingBoxes(True)
+    # debugNP = bullcldrnp.attachNewNode(debugNode)
+    # debugNP.show()
     
-    tps.bulletworldhp.setDebugNode(debugNP.node())
+    # tps.bulletworldhp.setDebugNode(debugNP.node())
     
-    taskMgr.add(updateworld, "updateworld", extraArgs=[tps.bulletworldhp], appendTask=True)
+    # taskMgr.add(updateworld, "updateworld", extraArgs=[tps.bulletworldhp], appendTask=True)
 
     # tps.grpshow(base)
     # tps.showOnePlacementAndAssociatedGrips(base)
