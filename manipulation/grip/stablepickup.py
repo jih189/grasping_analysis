@@ -89,7 +89,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.validangle = 0.5
+        self.validangle = 0.1
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -142,7 +142,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        random_index = 18
+        # random_index = 197
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -154,8 +154,7 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        print("number of possible placements of this grasp ", len(result))
-        random_placement_index = 1
+        # random_placement_index = 0
         print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
@@ -186,27 +185,28 @@ class StablePickupPlanner(object):
             return np.arctan2(temp[1], temp[0])
 
         def findWhichRangeDirectionBelongto(anglelist, direction):
+            # i am not sure is this corret or not
 
             maxindex = np.argmax(anglelist)
             minindex = np.argmin(anglelist)
             if direction > anglelist[maxindex] or direction < anglelist[minindex]:
-                left = min(minindex, maxindex)
-                right = max(minindex, maxindex)
-                if left == 0 and right == len(anglelist) - 1:
-                    return [right, left]
-                else:
-                    return [left, right]
+                return [maxindex, minindex]
+                # left = min(minindex, maxindex)
+                # right = max(minindex, maxindex)
+                # if left == 0 and right == len(anglelist) - 1:
+                #     return [right, left]
+                # else:
+                #     return [left, right]
 
             for f in range(len(anglelist)):
                 left = f
                 right = f + 1 if f < len(anglelist) - 1 else 0
-                if (left == maxindex and right == minindex) or (left == minindex and right == maxindex):
+
+                if (left == maxindex and right == minindex):
                     continue
-                if (anglelist[left] > direction and anglelist[right] < direction) or (anglelist[left] < direction and anglelist[right] > direction):
-                    if left == 0 and right == len(anglelist) - 1:
-                        return [right, left]
-                    else:
-                        return [left, right]
+
+                if anglelist[left] < direction and anglelist[right] > direction:
+                    return [left, right]
 
         # in this section , we first find both ff or stable placement which are on the both side of current lifted up pose
         # then find the all corner points between this two placements, so we can find how to rotate to both way
@@ -219,6 +219,7 @@ class StablePickupPlanner(object):
         possibleplacements, possibleplacementdirections, rotatecorners, tempplacements = pg.generateFFPlacement(self.objtrimeshconv, 
                                                 liftupplanedirection, 
                                                 self.objcom, 0.3)
+        
 
         rotatematrix = trigeom.align_vectors(liftupplanedirection, [0,0,1])
 
@@ -240,7 +241,6 @@ class StablePickupPlanner(object):
         twoplacements = findWhichRangeDirectionBelongto(placementdirectionangles, currentplacementdirection2d)
 
         # need to check collision of the gripper so we can determine which way should be used.
-
         leftwaycorner = rotatecorners[twonearplacementdirectionindex[0]][:twoplacements[1]]
         leftwayplacements = pivotingplacements[:twoplacements[1]]
 
@@ -253,7 +253,6 @@ class StablePickupPlanner(object):
             if self.bulletworldhp.contactTest(cd.genCollisionMeshMultiNp(self.hand.handnp)).getNumContacts():
                 leftAvalibility = False
                 break
-
 
         rightwaycorner = list(reversed(rotatecorners[twonearplacementdirectionindex[0]][twoplacements[0]:]))
         rightwayplacements = list(reversed(pivotingplacements[twoplacements[1]:]))
@@ -606,7 +605,7 @@ class StablePickupPlanner(object):
         placementpose1: first placement pose
         placementpose2: second placement pose
         the pivot point list in the object frame
-        where pivotPoint[0] is a list of pivot poing, while pivotPoint[1] is the rotation axis
+        where pivotPoint[0] is a list of pivot point, while pivotPoint[1] is the rotation axis
         """
 
         # calculate the pivoted pose
@@ -632,7 +631,6 @@ class StablePickupPlanner(object):
         rotateAngle = np.linalg.norm(r)
         rotateAxis = r / rotateAngle
                 
-        # print("rotate angle = ", rotateAngle)
         stepNum = max(int(rotateAngle / 0.02), 1) # 30
         stepRotation = rotateAngle / stepNum * rotateAxis
 
@@ -771,6 +769,7 @@ class StablePickupPlanner(object):
         # fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
 
         planeDirectionAndPlacement = self.getConnectionsBetweenPlacements(self.placementdirections)
+
         planegrasps = [[] for _ in range(len(planeDirectionAndPlacement))]
 
         # group the grasps for each plane
@@ -800,7 +799,6 @@ class StablePickupPlanner(object):
 
         currentPlacementid, currentPlacementtype = self.getPlacementIdFromPose(currentPlacement)
         currrentplacementnodeid = currentPlacementid
-        print("stable type placement id ", currentPlacementid)
         if currentPlacementtype == 1:
             currrentplacementnodeid = self.getdmgid(currentPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
 
@@ -814,10 +812,10 @@ class StablePickupPlanner(object):
         if targetPlacementtype == 1:
             targetplacementnodeid = self.getdmgid(targetPlacementid, np.array(cct1-cct0)/np.linalg.norm(cct1-cct0))
 
-        print("current placement id ", currrentplacementnodeid)
+        # print("current placement id ", currrentplacementnodeid)
 
-        nx.draw(self.Graph, with_labels=True)
-        plt.show()
+        # nx.draw(self.Graph, with_labels=True)
+        # plt.show()
         # return None
 
         path = nx.shortest_path(self.Graph, currrentplacementnodeid, targetplacementnodeid)
@@ -937,7 +935,7 @@ class DemoHelper(DirectObject.DirectObject):
 
         return task.again
 
-    def saveEvent(self):
+    def saveEvent(self, object_name):
         """
         Save the end-effector trajectory and how the object should be grasp at the beginning
         """
@@ -958,10 +956,10 @@ class DemoHelper(DirectObject.DirectObject):
                 data.append((action, trajectory))
 
         json_string = json.dumps(data)
-        with open('json_data.json', 'w') as outfile:
+        with open(object_name + '_json_data.json', 'w') as outfile:
             outfile.write(json_string)
         json_string = json.dumps(self.savedGrasp[0].tolist())
-        with open('grasp_json_data.json', 'w') as outfile:
+        with open(object_name + '_grasp_json_data.json', 'w') as outfile:
             outfile.write(json_string)
 
     def executeEvent(self):
@@ -993,15 +991,18 @@ if __name__ == '__main__':
     base = pandactrl.World(camp=[700,700,700], lookatp=[0,0,0], focusLength=1212)
     this_dir, this_filename = os.path.split(__file__)
 
+    object_name = "book"
+    # object_name = "bottle"
+
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", object_name + ".stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
     # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -1024,7 +1025,6 @@ if __name__ == '__main__':
     liftuppose = pickup_planner.getPrePickupPose(input_grasp[0], input_grasp[1])
 
     placedownPose, liftuptrajectoryplacement, liftuptrajectorycorners, liftupfingerdirection = pickup_planner.checkWayToPlace(liftuppose, input_grasp[0], input_grasp[1])
-
 
     pickup_planner.createPlacementGraph(base)
 
@@ -1049,6 +1049,7 @@ if __name__ == '__main__':
         next_grasp = None
         next_jawwidth = None
 
+        # regrasp the object
         for pgl in pivotGraspslist:
             pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
             grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
@@ -1057,6 +1058,7 @@ if __name__ == '__main__':
                 next_jawwidth = pivotgraspJawwidth
                 break
 
+        # if regrasp has moved the gripper, then add it to planning
         if not np.array_equal(grasp_trajectory[0], grasp_trajectory[-1]):
             poseTrajectory = []
             for g in range(len(grasp_trajectory) - 1):
@@ -1098,12 +1100,15 @@ if __name__ == '__main__':
         demoHelper.addEvent("closeGripper", 0)
         liftuptrajectoryplacement.append(liftuppose)
         for s in range(len(liftuptrajectorycorners)):
+            pandageom.plotSphere(base.render, pos=pickup_planner.getPointFromPose(pg.cvtMat4np4(currentplacement), Point3(liftuptrajectorycorners[s][0][0], liftuptrajectorycorners[s][0][1] , liftuptrajectorycorners[s][0][2])), radius=5, rgba=Vec4(1,0,0,1))
             pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
             demoHelper.addEvent("pivot", pivotTrajectory)
             currentplacement = pivotTrajectory[-1]
             
         demoHelper.setObjPose(initial_placement)
         demoHelper.setHandPose(initial_placement.dot(input_grasp[0]), input_grasp[1])
+    else:
+        print("can't move back")
 
     liftuppose[0][3] += 300
     pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
@@ -1133,6 +1138,6 @@ if __name__ == '__main__':
     axis.setScale(10)
     axis.reparentTo(base.render)
 
-    demoHelper.saveEvent()
+    demoHelper.saveEvent(object_name)
 
     base.run()

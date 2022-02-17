@@ -12,7 +12,7 @@ import math
 import trimesh
 import time
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import geopandas as gpd
 
 class PandaGeomGen(object):
@@ -1001,10 +1001,16 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     faceSide = []
 
     for p in range(len(facetp.exterior.coords) - 1):
-        if not isClose(facetp.exterior.coords[p], facetp.exterior.coords[p+1], 0.1):
+        if not isClose(facetp.exterior.coords[p], facetp.exterior.coords[p+1], 0.5):
             faceSide.append(facetp.exterior.coords[p])
 
-    faceSide.append(faceSide[0])
+    # check is the corner clockwise or counterclock wise
+    checkcornerangle = [np.arctan2(f[1], f[0]) for f in faceSide]
+    cornermaxindex = np.argmax(checkcornerangle)
+    cornerminindex = np.argmin(checkcornerangle)
+    if (cornermaxindex == 0 and cornerminindex == (len(checkcornerangle) - 1)) or (cornermaxindex != 0 and cornermaxindex > cornerminindex):
+        # it is clockwise, so we need to convert it to counterclockwise
+        faceSide = faceSide[::-1]
 
     verts2d = []
 
@@ -1021,6 +1027,8 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
                     verts2d.append(faceSide[p])
             elif not inSameLine(faceSide[p-1], faceSide[p], faceSide[p+1]):
                 verts2d.append(faceSide[p])
+
+    verts2d.append(verts2d[0])
 
     ffdirections = []
     heights = []
@@ -1063,8 +1071,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         interaction = nearest_points(line_2d, mass_center_2d)[0]
         ffdirection = np.array([interaction.x - mass_center_2d.x, interaction.y - mass_center_2d.y, 0])
 
-        
-
         # if the mass center does not project onto the line, the ignore it
         if (isClose([interaction.x,interaction.y], verts2d[p], 1.0) or isClose([interaction.x,interaction.y], verts2d[p+1], 1.0)) or line_2d.length / np.linalg.norm(ffdirection) < doverh:
             if p == 0:
@@ -1095,7 +1101,6 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         
         ffdirections.append(ffdirection)
 
-
     ffplacements = []
     for f in range(len(ffdirections)):
         ffdirections[f][abs(ffdirections[f]) < 1e-12] = 0.0 # handle the case align_vectors has two invert directions
@@ -1103,6 +1108,10 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
         rotplacement[2,3] = heights[f]
         ffplacements.append(rotplacement)
         
+    # print("pivot points")
+    # print(pivotpoints)
+    # xs.append(verts2d[-1][0])
+    # ys.append(verts2d[-1][1])
     # plt.plot(xs, ys)
     # plt.show()
 
