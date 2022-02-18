@@ -2,7 +2,6 @@
 import sys
 import os
 import numpy as np
-from numpy.lib.function_base import place
 
 from direct.showbase import DirectObject
 
@@ -39,29 +38,8 @@ from time import sleep
 import matplotlib.pyplot as plt
 import json
 
-# fibonacci sphere points generator
-def fibonacci_sphere(samples=100):
-
-    points = []
-    phi = math.pi * (3.0 - math.sqrt(5.0))  # golden angle in radians
-
-    for i in range(samples):
-        y = 1 - (i / float(samples - 1)) * 2  # y goes from 1 to -1
-        radius = math.sqrt(1 - y * y)  # radius at y
-
-        theta = phi * i  # golden angle increment
-
-        x = math.cos(theta) * radius
-        z = math.sin(theta) * radius
-
-        points.append((x, y, z))
-
-    return points
-
-def mapParallelDirection(d):
-    if d[0] < 0.0 or (d[0] == 0.0 and d[1] < 0.0) or (d[0] == 0.0 and d[1] == 0.0 and d[2] < 0.0):
-        return (-d[0], -d[1], -d[2])
-    return (d[0], d[1], d[2])
+def guass(x, a = 1.0, sigma=1.0):
+    return a * np.exp(-1*sigma*x**2)
 
 class StablePickupPlanner(object):
     def __init__(self, objpath, handpkg, gdb):
@@ -389,55 +367,7 @@ class StablePickupPlanner(object):
         plane_center = np.array([p1[0] + p0[0], p1[1] + p0[1], p1[2] + p0[2]]) / 2
         return np.concatenate((plane_center, normal_direction))
 
-    def generateManipulationPlane(self):
-        '''
-        According to the object mesh, it will generate a set of manipulation plane with contact points on it
-        However, there will be no opposite plane in this case for now.
-        '''
 
-        # use a fibonacci method to generate a set of direction in 2d
-        possibleFingerDirections = fibonacci_sphere(642)
-
-        # each i-th list of graspsInDirection contains a set of grasps belong the plane whose normal is equal to i-th accuracyDirect.
-        graspsInDirection = [[] for _ in range(len(possibleFingerDirections))] # possible finger directions
-        accuracyDirect = np.zeros((len(possibleFingerDirections), 3))
-
-        # build the kd tree of the direction sets
-        tpsdirections = KDTree(np.array(possibleFingerDirections))
-
-        # cluster grasps according to the plane
-        for f in range(len(self.freegripnormals)):
-            _, ind = tpsdirections.query(mapParallelDirection(self.freegripnormals[f][0]))
-            if len(graspsInDirection[ind]) == 0:
-                newFreegripnormals = mapParallelDirection(self.freegripnormals[f][0])
-                accuracyDirect[ind][0] = newFreegripnormals[0]
-                accuracyDirect[ind][1] = newFreegripnormals[1]
-                accuracyDirect[ind][2] = newFreegripnormals[2]
-            graspsInDirection[ind].append([self.freegriprotmats[f], 
-                                          self.freegripjawwidth[f], 
-                                          self.freegripid[f], 
-                                          self.freegripnormals[f][0], 
-                                          self.freegripnormals[f][1]])
-
-        # fingeridrections keeps the pair(normal direction of a set of grasp, direction id)
-        fingerdirections = []
-        contactpointInPlane = []
-        graspsIdInPlane = []
-        for n in range(len(graspsInDirection)):
-            # for each finger direction
-            if len(graspsInDirection[n]) > 0:
-                # if there is some grasps in this direction
-                fingerdirections.append(accuracyDirect[n])
-                contactpoints = []
-                graspids = []
-                for i in range(len(graspsInDirection[n])):
-                    # find the contact point for each grasp
-                    contactpoints.append(rm.transformmat4(np.transpose(graspsInDirection[n][i][0]), [self.hand.contactPointOffset, 0, 0]))
-                    graspids.append(graspsInDirection[n][i][2])
-                contactpointInPlane.append(contactpoints)
-                graspsIdInPlane.append(graspids)
-
-        return fingerdirections, contactpointInPlane, graspsIdInPlane
 
     def getdmgid(self, placementid_, fingerdirection):
         sql = "SELECT dmgs.iddmg, dmgs.planevector FROM dmgs WHERE dmgs.placementid=%d " % placementid_
@@ -599,13 +529,14 @@ class StablePickupPlanner(object):
 
         # return pg.cvtMat4np4(pose)
 
-    def getPivotTrajectory(self, placementpose1, placementpose2, pivotPoint):
+    def getPivotTrajectory(self, placementpose1, placementpose2, pivotPoint, pivotinggrasppoint = None):
         """
         Given the beginning placement and target placement, we use the pivotPoint to find the final placement after pivoting.
         placementpose1: first placement pose
         placementpose2: second placement pose
         the pivot point list in the object frame
-        where pivotPoint[0] is a list of pivot point, while pivotPoint[1] is the rotation axis
+            where pivotPoint[0] is a list of pivot point, while pivotPoint[1] is the rotation axis
+        grasp point for pivoting
         """
 
         # calculate the pivoted pose
@@ -643,6 +574,12 @@ class StablePickupPlanner(object):
             result.append(placementpose1.dot(shiftmatrix).dot(rotateMatrix).dot(np.linalg.inv(shiftmatrix)))
         
         result.append(pivotedPlacement)
+
+        if not pivotinggrasppoint is None: # consider grasp for pivoting
+            pivotPlaneGroundDirection = np.cross(pivotPoint[1], np.array([0,0,1]))
+            for r in range(len(result)):
+                pivot_dis = np.linalg.norm(pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3]))
+                result[r][2][3] += guass(pivot_dis, 2, 0.008)
 
         return result
 
@@ -765,8 +702,6 @@ class StablePickupPlanner(object):
         
         # self.Graph = nx.Graph()
         self.Graph = nx.DiGraph()
-
-        # fingerdirections, contactpointInPlane, graspsIdInPlane = self.generateManipulationPlane()
 
         planeDirectionAndPlacement = self.getConnectionsBetweenPlacements(self.placementdirections)
 
@@ -1054,9 +989,14 @@ if __name__ == '__main__':
             pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
             grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
             if not grasp_trajectory == None:
+                # if find a proper grasp, save it and break
                 next_grasp = pg.mat4ToNp(pivotgrasp)
                 next_jawwidth = pivotgraspJawwidth
                 break
+
+        if grasp_trajectory == None:
+            print("regrasp failure")
+            exit()
 
         # if regrasp has moved the gripper, then add it to planning
         if not np.array_equal(grasp_trajectory[0], grasp_trajectory[-1]):
@@ -1067,18 +1007,25 @@ if __name__ == '__main__':
             demoHelper.addEvent("setGripper", next_jawwidth)
             demoHelper.addEvent("fingerGait", poseTrajectory)
 
+        ###################################################################################################
+
+        pivotingGraspPoint = (grasp_trajectory[-1].dot(np.array([regrasp_planner.hand.fingertipsOffset, 0, 0, 1])))[:3]
+
+        ###################################################################################################
+
+
         if pivotCornerPoint[0].shape[0] > 1: # when the pivoting edge is not sharp
 
             rotatedplacementposelist = [placement1pose] + pivotCornerPoint[2] + [placement2pose]
             demoHelper.addEvent("closeGripper", 0)
             for l in range(pivotCornerPoint[0].shape[0]):
                 # pivoting
-                pivotTrajectory = [currentplacement.dot(np.linalg.inv(rotatedplacementposelist[l])).dot(p) for p in pickup_planner.getPivotTrajectory(rotatedplacementposelist[l], rotatedplacementposelist[l+1], [pivotCornerPoint[0][l], pivotCornerPoint[1]])]
+                pivotTrajectory = [currentplacement.dot(np.linalg.inv(rotatedplacementposelist[l])).dot(p) for p in pickup_planner.getPivotTrajectory(rotatedplacementposelist[l], rotatedplacementposelist[l+1], [pivotCornerPoint[0][l], pivotCornerPoint[1]], pivotingGraspPoint)]
                 demoHelper.addEvent("pivot", pivotTrajectory)
                 currentgrasp = [next_grasp, next_jawwidth]
                 currentplacement = pivotTrajectory[-1]
         else:
-            pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, [pivotCornerPoint[0][0], pivotCornerPoint[1]])]
+            pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, [pivotCornerPoint[0][0], pivotCornerPoint[1]], pivotingGraspPoint)]
             demoHelper.addEvent("closeGripper", 0)
             demoHelper.addEvent("pivot", pivotTrajectory)
             currentgrasp = [next_grasp, next_jawwidth]
@@ -1100,7 +1047,6 @@ if __name__ == '__main__':
         demoHelper.addEvent("closeGripper", 0)
         liftuptrajectoryplacement.append(liftuppose)
         for s in range(len(liftuptrajectorycorners)):
-            pandageom.plotSphere(base.render, pos=pickup_planner.getPointFromPose(pg.cvtMat4np4(currentplacement), Point3(liftuptrajectorycorners[s][0][0], liftuptrajectorycorners[s][0][1] , liftuptrajectorycorners[s][0][2])), radius=5, rgba=Vec4(1,0,0,1))
             pivotTrajectory = [currentplacement.dot(np.linalg.inv(liftuptrajectoryplacement[s])).dot(p) for p in pickup_planner.getPivotTrajectory(liftuptrajectoryplacement[s], liftuptrajectoryplacement[s+1], [liftuptrajectorycorners[s][0], liftupfingerdirection])]
             demoHelper.addEvent("pivot", pivotTrajectory)
             currentplacement = pivotTrajectory[-1]
@@ -1111,7 +1057,7 @@ if __name__ == '__main__':
         print("can't move back")
 
     liftuppose[0][3] += 300
-    pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
+    # pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
 
     #####################################################################################
     #                                  show the demo                                    #
