@@ -67,7 +67,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.validangle = 0.1
+        self.horizontal_threshold = 5.0
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -120,7 +120,7 @@ class StablePickupPlanner(object):
          
         """
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 197
+        # random_index = 73
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -132,7 +132,7 @@ class StablePickupPlanner(object):
             print("there is no way to place the object with current grasp")
             return None, None
         random_placement_index = random.randint(0, len(result) - 1)
-        # random_placement_index = 0
+        # random_placement_index = 1
         print("check random placement id", random_placement_index)
 
         return [pg.mat4ToNp(self.freegriprotmats[random_index]), self.freegripjawwidth[random_index]], pg.mat4ToNp(dc.strToMat4(result[random_placement_index][0]))
@@ -381,6 +381,7 @@ class StablePickupPlanner(object):
         placement2placement = []
         # according to all possible finger directions, a set of placements can be pivoted by that grasp
         # the placements is in a loop according to the fingertip direction
+        checkbug = True
         for fingerdirection, currentGraspsIds in zip(fingerdirections, graspsIdInPlane):
 
             if len(currentGraspsIds) == 0:
@@ -432,9 +433,14 @@ class StablePickupPlanner(object):
                     # check whether the grasps length is longer than the mass center length
                     commonvalidgrasps = np.vstack((commonvalidgrasps, (np.linalg.norm(graspsdirections, axis=1)[:, np.newaxis].transpose() > np.linalg.norm(massCenterDirectionMat[c]))))
                     # check if the angle between current grasp direction and mass angle is too large
+
                     graspsdirections = graspsdirections / np.linalg.norm(graspsdirections, axis=1)[:, np.newaxis]
                     massdirectiontemp = massCenterDirectionMat[c] / np.linalg.norm(massCenterDirectionMat[c])
-                    commonvalidgrasps = np.vstack((commonvalidgrasps, np.arccos(graspsdirections.dot(massdirectiontemp)) < self.validangle))
+
+                    graspsangle =  np.arccos(graspsdirections.dot(massdirectiontemp))
+                    horizontal_dis_of_grasps = np.linalg.norm(massCenterDirectionMat[c]) * np.sin(graspsangle)
+
+                    commonvalidgrasps = np.vstack((commonvalidgrasps, horizontal_dis_of_grasps < self.horizontal_threshold))
 
                 valid_common_grasp_bit = commonvalidgrasps.all(0)
 
@@ -535,7 +541,7 @@ class StablePickupPlanner(object):
         placementpose1: first placement pose
         placementpose2: second placement pose
         the pivot point list in the object frame
-            where pivotPoint[0] is a list of pivot point, while pivotPoint[1] is the rotation axis
+            where pivotPoint[0] is a pivot point, while pivotPoint[1] is the rotation axis
         grasp point for pivoting
         """
 
@@ -578,8 +584,9 @@ class StablePickupPlanner(object):
         if not pivotinggrasppoint is None: # consider grasp for pivoting
             pivotPlaneGroundDirection = np.cross(pivotPoint[1], np.array([0,0,1]))
             for r in range(len(result)):
-                pivot_dis = np.linalg.norm(pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3]))
-                result[r][2][3] += guass(pivot_dis, 2, 0.008)
+                pivot_hight_dis = np.array([0,0,1]).dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3])
+                pivot_ground_dis = np.linalg.norm(pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotPoint[0][0], pivotPoint[0][1], pivotPoint[0][2], 1])))[:3]) - pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3]))
+                result[r][2][3] += guass(np.arctan2(pivot_ground_dis, pivot_hight_dis), 10, 12.0)
 
         return result
 
@@ -926,7 +933,8 @@ if __name__ == '__main__':
     base = pandactrl.World(camp=[700,700,700], lookatp=[0,0,0], focusLength=1212)
     this_dir, this_filename = os.path.split(__file__)
 
-    object_name = "book"
+    object_name = "can"
+    # object_name = "book"
     # object_name = "bottle"
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
@@ -984,11 +992,23 @@ if __name__ == '__main__':
         next_grasp = None
         next_jawwidth = None
 
+        # sort all grasp according to the action step needed
+        # that is, it will try to move to a closest grasp first
+        actionnumberlist = []
+        for pgl in pivotGraspslist:
+            pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
+            grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
+            if grasp_trajectory is None:
+                actionnumberlist.append(100)
+            else:
+                actionnumberlist.append(len(grasp_trajectory))
+        pivotGraspslist = [x for _, x in sorted(zip(actionnumberlist, pivotGraspslist))]
+
         # regrasp the object
         for pgl in pivotGraspslist:
             pivotgrasp, pivotgraspJawwidth = pickup_planner.gdb.loadFreeAirGripByIds(pgl)
             grasp_trajectory = regrasp_planner.getTrajectory(currentgrasp[0], pg.mat4ToNp(pivotgrasp), pivotgraspJawwidth, currentplacement, base)
-            if not grasp_trajectory == None:
+            if not grasp_trajectory is None:
                 # if find a proper grasp, save it and break
                 next_grasp = pg.mat4ToNp(pivotgrasp)
                 next_jawwidth = pivotgraspJawwidth
@@ -1007,12 +1027,8 @@ if __name__ == '__main__':
             demoHelper.addEvent("setGripper", next_jawwidth)
             demoHelper.addEvent("fingerGait", poseTrajectory)
 
-        ###################################################################################################
-
+        # find the contact point of the current grasp for pivoting
         pivotingGraspPoint = (grasp_trajectory[-1].dot(np.array([regrasp_planner.hand.fingertipsOffset, 0, 0, 1])))[:3]
-
-        ###################################################################################################
-
 
         if pivotCornerPoint[0].shape[0] > 1: # when the pivoting edge is not sharp
 
@@ -1057,7 +1073,7 @@ if __name__ == '__main__':
         print("can't move back")
 
     liftuppose[0][3] += 300
-    # pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
+    pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
 
     #####################################################################################
     #                                  show the demo                                    #
