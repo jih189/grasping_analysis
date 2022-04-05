@@ -71,6 +71,8 @@ def align_vectors(vector_start, vector_end, return_angle=False):
     
     vector_end == np.dot(T, np.append(vector_start, 1))[0:3]
     '''
+    vector_start = np.around(vector_start, 10)
+    vector_end = np.around(vector_end, 10)
 
     # the following code is added by weiwei on 07212017
     # to correct the problems of same vectors and inverse vectors

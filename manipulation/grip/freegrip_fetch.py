@@ -19,7 +19,7 @@ from panda3d.bullet import BulletDebugNode
 
 class Freegrip(fgcp.FreegripContactpairs):
 
-    def __init__(self, objpath, handpkg, readser=False, torqueresist = 50):
+    def __init__(self, objpath, handpkg, readser=False, torqueresist = 200):
         """
         initialization
 
@@ -28,14 +28,14 @@ class Freegrip(fgcp.FreegripContactpairs):
         :param torqueresist: the maximum allowable distance to com (see FreegripContactpairs.planContactpairs)
         """
 
-        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=50, readser=readser)
+        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=200, readser=readser)
         if readser is False:
             # use this one to set the max and min distance from fingertips to the boundary
-            self.removeBadSamples(mindist=1, maxdist=25)
-            self.clusterFacetSamplesRNN(reduceRadius=5)
+            self.removeBadSamples(mindist=1, maxdist=10)
+            self.clusterFacetSamplesRNN(reduceRadius=3)
             # self.removeBadSamples(mindist=7, maxdist=25)
             # self.clusterFacetSamplesRNN(reduceRadius=8)
-            self.planContactpairs(torqueresist, fgrtipdist = 100)
+            self.planContactpairs(torqueresist, fgrtipdist = 60)
             # self.saveSerialized("tmpcp.pickle")
         else:
             pass
@@ -246,6 +246,7 @@ class Freegrip(fgcp.FreegripContactpairs):
         geomnodeobj.addGeom(self.objgeom)
         npnodeobj = NodePath('obj')
         npnodeobj.attachNewNode(geomnodeobj)
+        npnodeobj.setColor(Vec4(.8,0.8,0.8,1))
         npnodeobj.reparentTo(base.render)
 
     def showAllGrips(self):
@@ -285,16 +286,19 @@ if __name__=='__main__':
 
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
     # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
     # objpath = os.path.join(this_dir, "objects", "bottle.stl")
-    objpath = os.path.join(this_dir, "objects", "can.stl")
+    # objpath = os.path.join(this_dir, "objects", "can.stl")
+    # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
+    # objpath = os.path.join(this_dir, "objects", "Hshape.stl")
+
 
     handpkg = fetch_grippernm
-    freegriptst = Freegrip(objpath, handpkg, readser=False, torqueresist = 120)
+    freegriptst = Freegrip(objpath, handpkg, readser=False, torqueresist = 500)
 
     freegriptst.removeFgrpcc(base)
     freegriptst.removeHndcc(base)

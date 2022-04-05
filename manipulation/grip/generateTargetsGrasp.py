@@ -4,7 +4,7 @@ import os
 from panda3d.bullet import BulletWorld
 from panda3d.bullet import BulletDebugNode
 from panda3d.core import *
-from ffregrasp import ff_regrasp_planner, PandaPosMax_t_PosMat, PosMat_t_PandaPosMax
+from ffregrasp import ff_regrasp_planner
 from manipulation.grip.fetch_gripper import fetch_grippernm
 from database import dbaccess as db
 from utils import dbcvt as dc
@@ -32,21 +32,23 @@ if __name__ == '__main__':
     base = pandactrl.World(camp=[700,300,1400], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
+    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
+    objpath = os.path.join(this_dir, "objects", "Ushape.stl")
 
-    gdb = db.GraspDB()
-    objectId = None
+    # gdb = db.GraspDB()
+    # objectId = None
 
-    sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % os.path.splitext(os.path.basename(objpath))[0]
-    result = gdb.execute(sql)
-    if not result:
-        print("please add the object name to table first!!!")
-        exit()
-    else:
-        objectId = int(result[0][0]) 
+    # sql = "SELECT * FROM object WHERE object.name LIKE '%s'" % os.path.splitext(os.path.basename(objpath))[0]
+    # result = gdb.execute(sql)
+    # if not result:
+    #     print("please add the object name to table first!!!")
+    #     exit()
+    # else:
+    #     objectId = int(result[0][0]) 
 
     objtrimesh=trimesh.load_mesh(objpath)
     geom = pg.packpandageom(objtrimesh.vertices,
@@ -65,7 +67,7 @@ if __name__ == '__main__':
     fetchhnd = handpkg.newHandNM(hndcolor=[0,1,0,1])
     # test
     fetchhnd.setJawwidth(90)
-    fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(np.array([[1,0,0,0.02], [0,1,0,0], [0,0,1,0], [0,0,0,1]])))
+    fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(np.array([[1,0,0,20], [0,1,0,0], [0,0,1,0], [0,0,0,1]])))
     fetchhnd.reparentTo(base.render)
 
     print("w,s,a,d,q,e: translation")
@@ -75,46 +77,47 @@ if __name__ == '__main__':
     print("x: print pose")
 
     def shift(pose):
-        return pose.dot(np.array([[1,0,0,-0.02], [0,1,0,0], [0,0,1,0], [0,0,0,1]]))
+        return pose.dot(np.array([[1,0,0,-20], [0,1,0,0], [0,0,1,0], [0,0,0,1]]))
 
     def shiftback(pose):
-        return pose.dot(np.array([[1,0,0,0.02], [0,1,0,0], [0,0,1,0], [0,0,0,1]]))
+        return pose.dot(np.array([[1,0,0,20], [0,1,0,0], [0,0,1,0], [0,0,0,1]]))
 
     def eventW():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,-0.005], [0,1,0,0], [0,0,1,0], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        
+        moveupmat = np.array([[1,0,0,-5], [0,1,0,0], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     def eventS():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,0.005], [0,1,0,0], [0,0,1,0], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        moveupmat = np.array([[1,0,0,5], [0,1,0,0], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     def eventA():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,0], [0,1,0,-0.005], [0,0,1,0], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        moveupmat = np.array([[1,0,0,0], [0,1,0,-5], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     def eventD():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,0], [0,1,0,0.005], [0,0,1,0], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        moveupmat = np.array([[1,0,0,0], [0,1,0,5], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     def eventQ():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,0], [0,1,0,0], [0,0,1,0.005], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        moveupmat = np.array([[1,0,0,0], [0,1,0,0], [0,0,1,5], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     def eventE():
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
-        moveupmat = np.array([[1,0,0,0], [0,1,0,0], [0,0,1,-0.005], [0,0,0,1]])
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
+        moveupmat = np.array([[1,0,0,0], [0,1,0,0], [0,0,1,-5], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('w', eventW)
     base.accept('w-repeat', eventW)
@@ -136,60 +139,60 @@ if __name__ == '__main__':
 
     def event8():
         rotateStep = math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[math.cos(rotateStep),0,math.sin(rotateStep),0], [0,1,0,0], [-math.sin(rotateStep),0,math.cos(rotateStep),0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('8', event8)
     base.accept('8-repeat', event8)
 
     def event2():
         rotateStep = -math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[math.cos(rotateStep),0,math.sin(rotateStep),0], [0,1,0,0], [-math.sin(rotateStep),0,math.cos(rotateStep),0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('2', event2)
     base.accept('2-repeat', event2)
 
     def event4():
         rotateStep = math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[1,0,0,0], [0,math.cos(rotateStep),-math.sin(rotateStep),0], [0,math.sin(rotateStep),math.cos(rotateStep),0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('4', event4)
     base.accept('4-repeat', event4)
 
     def event6():
         rotateStep = -math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[1,0,0,0], [0,math.cos(rotateStep),-math.sin(rotateStep),0], [0,math.sin(rotateStep),math.cos(rotateStep),0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('6', event6)
     base.accept('6-repeat', event6)
 
     def event7():
         rotateStep = math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[math.cos(rotateStep),-math.sin(rotateStep),0,0], [math.sin(rotateStep),math.cos(rotateStep),0,0], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('7', event7)
     base.accept('7-repeat', event7)
 
     def event9():
         rotateStep = -math.pi / 36
-        currentPose = shift(PandaPosMax_t_PosMat(fetchhnd.getMat()))
+        currentPose = shift(pg.mat4ToNp(fetchhnd.getMat()))
         moveupmat = np.array([[math.cos(rotateStep),-math.sin(rotateStep),0,0], [math.sin(rotateStep),math.cos(rotateStep),0,0], [0,0,1,0], [0,0,0,1]])
         currentPose = shiftback(currentPose.dot(moveupmat))
-        fetchhnd.setMat(pandanpmat4=PosMat_t_PandaPosMax(currentPose))
+        fetchhnd.setMat(pandanpmat4=pg.cvtMat4np4(currentPose))
 
     base.accept('9', event9)
     base.accept('9-repeat', event9)
@@ -216,10 +219,10 @@ if __name__ == '__main__':
         print(dc.mat4ToStr(fetchhnd.getMat()))
         print(str(fetchhnd.jawwidth))
 
-        sql = "INSERT INTO targetgrasps(idobject, grasppose, jawwidth) \
-                                VALUES('%d', '%s', '%s')" % \
-                                (objectId, dc.mat4ToStr(fetchhnd.getMat()), str(fetchhnd.jawwidth))
-        gdb.execute(sql)
+        # sql = "INSERT INTO targetgrasps(idobject, grasppose, jawwidth) \
+        #                         VALUES('%d', '%s', '%s')" % \
+        #                         (objectId, dc.mat4ToStr(fetchhnd.getMat()), str(fetchhnd.jawwidth))
+        # gdb.execute(sql)
 
     base.accept('x', eventX)
     base.accept('x-repeat', eventX)

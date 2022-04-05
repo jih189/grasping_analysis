@@ -501,7 +501,7 @@ class FreeTabletopPlacement(object):
         """
 
         for i in range(len(self.tpsmat4s)):
-            if i == 4:
+            if i == 2:
                 objrotmat  = self.tpsmat4s[i]
                 # objrotmat.setRow(0, -objrotmat.getRow3(0))
                 rotzmat = Mat4.rotateMat(0, Vec3(0,0,1))
@@ -519,18 +519,19 @@ class FreeTabletopPlacement(object):
                 star.setMat(objrotmat)
                 star.reparentTo(base.render)
                 for j in range(len(self.tpsgriprotmats[i])):
-                    hndrotmat = self.tpsgriprotmats[i][j]
-                    hndjawwidth = self.tpsgripjawwidth[i][j]
-                    # show grasps
-                    tmphnd = self.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
-                    tmphnd.setMat(pandanpmat4 = hndrotmat)
-                    tmphnd.setJawwidth(hndjawwidth)
-                    # tmphnd.setJawwidth(0)
-                    # tmprtq85.setJawwidth(80)
-                    tmphnd.reparentTo(base.render)
+                    if j == 20 or j == 4:
+                        hndrotmat = self.tpsgriprotmats[i][j]
+                        hndjawwidth = self.tpsgripjawwidth[i][j]
+                        # show grasps
+                        tmphnd = self.handpkg.newHandNM(hndcolor=[0, 1, 0, .5])
+                        tmphnd.setMat(pandanpmat4 = hndrotmat)
+                        tmphnd.setJawwidth(hndjawwidth)
+                        # tmphnd.setJawwidth(0)
+                        # tmprtq85.setJawwidth(80)
+                        tmphnd.reparentTo(base.render)
     
     def showAllFFPlacement(self, base):
-        distanceBetweenObjects = 300
+        distanceBetweenObjects = 400
 
         numberOfPlacements = len(self.tpsffplacements)
         print("number of ff placements = ", numberOfPlacements)
@@ -581,7 +582,7 @@ class FreeTabletopPlacement(object):
         :return:
         """
 
-        distanceBetweenObjects = 500
+        distanceBetweenObjects = 200
 
         numberOfPlacements = len(self.tpsmat4s)
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
@@ -602,6 +603,7 @@ class FreeTabletopPlacement(object):
 
             tx, ty = placementTable[i]
             objrotmat = self.tpsmat4s[i]
+            # objrotmat = pg.npToMat4(np.identity(4))
             objrotmat.setCell(3,0,tx * distanceBetweenObjects + objrotmat.getCell(3,0))
             objrotmat.setCell(3,1,ty * distanceBetweenObjects + objrotmat.getCell(3,1))
 
@@ -614,18 +616,20 @@ class FreeTabletopPlacement(object):
             node.addGeom(geom)
             star = NodePath('obj')
             star.attachNewNode(node)
+            # star.setColor(Vec4(0.5,0,0.0,0.7))
             if i < self.numberOfStable:
-                star.setColor(Vec4(.7,0.3,0,1))
+                star.setColor(Vec4(.7,0.3,0,0.7))
             else:
                 star.setColor(Vec4(.7,0.8,0,0.7))
             star.setTransparency(TransparencyAttrib.MAlpha)
             star.setMat(objrotmat)
             star.reparentTo(base.render)
 
-            # pandageom.plotArrow(base.render, spos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)),
-            #                         epos=self.getPointFromPose(objrotmat, Point3(self.grounddirection[i][0], self.grounddirection[i][1], self.grounddirection[i][2])),
-            #                         length=100,
-            #                         rgba=Vec4(0,0,1,1))
+            pandageom.plotSphere(base.render, pos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)), radius=8, rgba=Vec4(1,0,0,1))
+            pandageom.plotArrow(base.render, spos=self.getPointFromPose(objrotmat, Point3(0, 0, 0)),
+                                    epos=self.getPointFromPose(objrotmat, Point3(self.grounddirection[i][0], self.grounddirection[i][1], self.grounddirection[i][2])),
+                                    length=60,
+                                    rgba=Vec4(0,0,1,1))
                     
             # show the gripers
             for j in range(len(self.tpsgriprotmats[i])):
@@ -652,18 +656,21 @@ class FreeTabletopPlacement(object):
 if __name__ == '__main__':
 
     base = pandactrl.World(camp=[1400,600,2800], lookatp=[0,0,0])
+    # base = pandactrl.World(camp=[600,600,600], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
+    objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
     # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
     # objpath = os.path.join(this_dir, "objects", "bottle.stl")
-    objpath = os.path.join(this_dir, "objects", "can.stl")
+    # objpath = os.path.join(this_dir, "objects", "can.stl")
+    # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
+    # objpath = os.path.join(this_dir, "objects", "Hshape.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

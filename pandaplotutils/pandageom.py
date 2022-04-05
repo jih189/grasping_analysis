@@ -926,7 +926,7 @@ def getGroundDirection(pose):
     obj_grd_dir_pos= obj_grd_dir_pos/ np.linalg.norm(obj_grd_dir_pos)
     return obj_grd_dir_pos
 
-def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
+def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1, isDebug = False):
     """
     compute the contour according to a direction
     todo: need to check with object with other shape
@@ -1039,7 +1039,9 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
 
     # xs = []
     # ys = []
-    # plt.figure()
+
+    # if isDebug:
+    #     plt.figure()
     
     # calculate the ff direction
     for p in range(len(verts2d) - 1):
@@ -1112,8 +1114,12 @@ def generateFFPlacement(objtrimesh, direction, mass_center, doverh=0.1):
     # print(pivotpoints)
     # xs.append(verts2d[-1][0])
     # ys.append(verts2d[-1][1])
-    # plt.plot(xs, ys)
-    # plt.show()
+
+    # if isDebug:
+    #     plt.xlim([-200, 200])
+    #     plt.ylim([-200, 200])
+    #     plt.plot(xs, ys)
+    #     plt.show()
 
     pivotPlacements = []
     for p in pivotpoints:

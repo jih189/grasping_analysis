@@ -67,7 +67,7 @@ class StablePickupPlanner(object):
         self.hand = handpkg.newHandNM(hndcolor=[0,1,0,.7])
 
         self.counter = 0
-        self.horizontal_threshold = 5.0
+        self.horizontal_threshold = 35.0
 
         self.gdb = gdb
         self.loadFreeAirGrip()
@@ -114,13 +114,16 @@ class StablePickupPlanner(object):
 
         self.placementdirections = [pg.getGroundDirection(pg.mat4ToNp(p)) for p in self.tpsmat4s]
 
+
     def randomlyPickOneGrasp(self):
         """
         generate a random initial grasp and placement in numpy format
          
         """
+
         random_index = random.randint(0, len(self.freegripid))
-        # random_index = 73
+        
+        # random_index = 1042
         print("random index ", random_index)
 
         # get random placement where the grasp is valid
@@ -197,7 +200,6 @@ class StablePickupPlanner(object):
         possibleplacements, possibleplacementdirections, rotatecorners, tempplacements = pg.generateFFPlacement(self.objtrimeshconv, 
                                                 liftupplanedirection, 
                                                 self.objcom, 0.3)
-        
 
         rotatematrix = trigeom.align_vectors(liftupplanedirection, [0,0,1])
 
@@ -381,7 +383,6 @@ class StablePickupPlanner(object):
         placement2placement = []
         # according to all possible finger directions, a set of placements can be pivoted by that grasp
         # the placements is in a loop according to the fingertip direction
-        checkbug = True
         for fingerdirection, currentGraspsIds in zip(fingerdirections, graspsIdInPlane):
 
             if len(currentGraspsIds) == 0:
@@ -395,7 +396,7 @@ class StablePickupPlanner(object):
 
             # ffdirections is the placement direction in the object frame
             # rotate corners are the rotate corners in the object frame
-            _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.3)
+            _, ffdirections, rotateCornersInfo, rotateplacements = pg.generateFFPlacement(self.objtrimeshconv, fingerdirection, self.objcom, 0.3)#, True)
 
             if len(ffdirections) == 0:
                 continue
@@ -516,6 +517,7 @@ class StablePickupPlanner(object):
                         placement2placement.append([positiveplacement1nodeid, positiveplacement2nodeid , placement1poseid, placement2poseid, positiveValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
                         placement2placement.append([negativeplacement1nodeid, negativeplacement2nodeid , placement1poseid, placement2poseid, negativeValidPivotGraspid, (rotateCorners[l], fingerdirection, rotateplacements[l])])
 
+
         return placement2placement
 
     def placementdirection2pose(self, direction):
@@ -544,6 +546,7 @@ class StablePickupPlanner(object):
             where pivotPoint[0] is a pivot point, while pivotPoint[1] is the rotation axis
         grasp point for pivoting
         """
+        pivotinggrasppoint = None
 
         # calculate the pivoted pose
         p1 = rm.transformmat4(placementpose1, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose1, pivotPoint[0])[:3]
@@ -586,7 +589,7 @@ class StablePickupPlanner(object):
             for r in range(len(result)):
                 pivot_hight_dis = np.array([0,0,1]).dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3])
                 pivot_ground_dis = np.linalg.norm(pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotPoint[0][0], pivotPoint[0][1], pivotPoint[0][2], 1])))[:3]) - pivotPlaneGroundDirection.dot((result[r].dot(np.array([pivotingGraspPoint[0], pivotingGraspPoint[1], pivotingGraspPoint[2], 1])))[:3]))
-                result[r][2][3] += guass(np.arctan2(pivot_ground_dis, pivot_hight_dis), 10, 12.0)
+                result[r][2][3] += guass(np.arctan2(pivot_ground_dis, pivot_hight_dis), 5, 120.0)
 
         return result
 
@@ -595,25 +598,37 @@ class StablePickupPlanner(object):
         this function will visualize the pivot action
         """
         
-        placementpose1, placementpose2, graspids, pivotPoint = pivotaction
+        placementpose1id, placementpose2id, graspids, pivotPoint = pivotaction
+        placementpose1 = pg.mat4ToNp(self.gdb.loadFreeTabletopPlacementByIds(placementpose1id))
+        placementpose2 = pg.mat4ToNp(self.gdb.loadFreeTabletopPlacementByIds(placementpose2id))
         # placementpose1: first placement pose
         # placementpose2: second placement pose
         # graspids: a list of grasp ids to pivot from one placement to another
         # the pivot point in the object frame
 
-        p1 = rm.transformmat4(placementpose1, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose1, pivotPoint[0])[:3]
+        print("pivoting point")
+        print(pivotPoint[0])
+        print(pivotPoint[1])
+        for pv in pivotPoint[0]:
+            p1 = np.array(pv) + np.array(pivotPoint[1]) * 50
+            p2 = np.array(pv) - np.array(pivotPoint[1]) * 50
+            pandageom.plotSphere(base.render, pos=Point3(pv[0], pv[1], pv[2]), radius=2, rgba=Vec4(1,1,0,1))
+            pg.plotLinesegs(base.render, np.array([[p1[0], p1[1], p1[2]],[p2[0], p2[1], p2[2]]]), 1.0, Vec4(0,1,1,1))
 
-        cornerpoint1 = np.identity(4)
-        cornerpoint1[:3, :3] = np.vstack([p1, np.dot(rm.hat(p1), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
-        cornerpoint1[:3, 3] = rm.transformmat4(placementpose1, pivotPoint[0])[:3]
+            # p1 = rm.transformmat4(placementpose1, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose1, pivotPoint[0])[:3]
 
-        p2 = rm.transformmat4(placementpose2, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose2, pivotPoint[0])[:3]
+            # cornerpoint1 = np.identity(4)
+            # cornerpoint1[:3, :3] = np.vstack([p1, np.dot(rm.hat(p1), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
+            # cornerpoint1[:3, 3] = rm.transformmat4(placementpose1, pivotPoint[0])[:3]
 
-        cornerpoint2 = np.identity(4)
-        cornerpoint2[:3, :3] = np.vstack([p2, np.dot(rm.hat(p2), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
-        cornerpoint2[:3, 3] = rm.transformmat4(placementpose2, pivotPoint[0])[:3]
+            # p2 = rm.transformmat4(placementpose2, pivotPoint[0] + pivotPoint[1])[:3] - rm.transformmat4(placementpose2, pivotPoint[0])[:3]
 
-        newPivotPose = cornerpoint1.dot(np.linalg.inv(cornerpoint2)).dot(placementpose2)
+            # cornerpoint2 = np.identity(4)
+            # cornerpoint2[:3, :3] = np.vstack([p2, np.dot(rm.hat(p2), np.array([0,0,1.0])), np.array([0,0,1.0])]).transpose()
+            # cornerpoint2[:3, 3] = rm.transformmat4(placementpose2, pivotPoint[0])[:3]
+            # pg.plotLinesegs()
+
+        # newPivotPose = cornerpoint1.dot(np.linalg.inv(cornerpoint2)).dot(placementpose2)
 
         geom = pg.packpandageom(self.objtrimesh.vertices,
                         self.objtrimesh.face_normals,
@@ -628,36 +643,49 @@ class StablePickupPlanner(object):
         objecttemp.setTransparency(TransparencyAttrib.M_dual)
 
         # plot the object
-        objecttemp.setMat(pg.cvtMat4np4(placementpose1))
+        objecttemp.setMat(pg.cvtMat4np4(np.identity(4)))
         objecttemp.reparentTo(base.render)
 
-        objecttemp1 = NodePath('obj')
-        objecttemp1.attachNewNode(geomnodeobj)
-        objecttemp1.setColor(0.5,0,0.5,0.2)
-        objecttemp1.setTransparency(TransparencyAttrib.M_dual)
+        pandageom.plotSphere(base.render, pos=Point3(0, 0, 0), radius=8, rgba=Vec4(1,0,0,1))
+        placement1_gound_direction = pg.getGroundDirection(placementpose1)
+        pandageom.plotArrow(base.render, spos=Point3(0, 0, 0),
+                                epos=Point3(placement1_gound_direction[0], placement1_gound_direction[1], placement1_gound_direction[2]),
+                                length=60,
+                                rgba=Vec4(0,0,1,1))
 
-        # plot the object
-        objecttemp1.setMat(pg.cvtMat4np4(newPivotPose))
-        objecttemp1.reparentTo(base.render)
+        placement2_gound_direction = pg.getGroundDirection(placementpose2)
+        pandageom.plotArrow(base.render, spos=Point3(0, 0, 0),
+                                epos=Point3(placement2_gound_direction[0], placement2_gound_direction[1], placement2_gound_direction[2]),
+                                length=60,
+                                rgba=Vec4(0,0,1,1))
+
+        # objecttemp1 = NodePath('obj')
+        # objecttemp1.attachNewNode(geomnodeobj)
+        # objecttemp1.setColor(0.5,0,0.5,0.2)
+        # objecttemp1.setTransparency(TransparencyAttrib.M_dual)
+
+        # # plot the object
+        # objecttemp1.setMat(pg.cvtMat4np4(newPivotPose))
+        # objecttemp1.reparentTo(base.render)
 
 
-        # show pivot point
-        pandageom.plotArrow(base.render, spos=self.getPointFromPose(pg.cvtMat4np4(placementpose1), Point3(pivotPoint[0][0], pivotPoint[0][1], pivotPoint[0][2])),
-                                    epos=self.getPointFromPose(pg.cvtMat4np4(placementpose1), Point3(pivotPoint[0][0] + pivotPoint[1][0], pivotPoint[0][1] + pivotPoint[1][1], pivotPoint[0][2] + pivotPoint[1][2])),
-                                    length=100,
-                                    rgba=Vec4(0,0,1,1))
+        # # show pivot point
+        # pandageom.plotArrow(base.render, spos=self.getPointFromPose(pg.cvtMat4np4(placementpose1), Point3(pivotPoint[0][0], pivotPoint[0][1], pivotPoint[0][2])),
+        #                             epos=self.getPointFromPose(pg.cvtMat4np4(placementpose1), Point3(pivotPoint[0][0] + pivotPoint[1][0], pivotPoint[0][1] + pivotPoint[1][1], pivotPoint[0][2] + pivotPoint[1][2])),
+        #                             length=100,
+        #                             rgba=Vec4(0,0,1,1))
 
-        for graspid in graspids:
+        # for graspid in graspids:
 
-            pivotgrasp, pivotgraspJawwidth = self.gdb.loadFreeAirGripByIds(graspid)
+        #     pivotgrasp, pivotgraspJawwidth = self.gdb.loadFreeAirGripByIds(graspid)
 
-            # draw the pivot grasp
-            tmphand = handpkg.newHandNM(hndcolor=[0,1,0,.2])
+        #     # draw the pivot grasp
+        #     tmphand = handpkg.newHandNM(hndcolor=[0,1,0,.2])
 
-            tmphand.setJawwidth(pivotgraspJawwidth)
-            tmphand.setMat(pandanpmat4 = pivotgrasp * pg.cvtMat4np4(placementpose1))
+        #     tmphand.setJawwidth(pivotgraspJawwidth)
+        #     tmphand.setMat(pandanpmat4 = pivotgrasp * pg.cvtMat4np4(placementpose1))
 
-            tmphand.reparentTo(base.render)
+        #     tmphand.reparentTo(base.render)
 
     def getPlacementIdFromPose(self, pose):
         """
@@ -725,6 +753,10 @@ class StablePickupPlanner(object):
         # generate a list of pair valid pivot action
         placement2placement = self.generateManipulationCircle([t[0] for t in planeDirectionAndPlacement], planegrasps, base)
 
+        # print("check")
+        # print(placement2placement[0][5])
+
+
         # build the graph
         for p in placement2placement:
             self.Graph.add_edge(p[0], p[1], placementid0=p[2], placementid1=p[3], pivotGraspids=p[4], pivotCorner=p[5])
@@ -777,7 +809,7 @@ class DemoHelper(DirectObject.DirectObject):
 
         self.demoObj = NodePath('obj')
         self.demoObj.attachNewNode(node)
-        self.demoObj.setColor(Vec4(.7,0.3,0,0.2))
+        self.demoObj.setColor(Vec4(.7,0.3,0,0.6))
         self.demoObj.setTransparency(TransparencyAttrib.MAlpha)
 
         self.handpkg = handpkg
@@ -933,9 +965,11 @@ if __name__ == '__main__':
     base = pandactrl.World(camp=[700,700,700], lookatp=[0,0,0], focusLength=1212)
     this_dir, this_filename = os.path.split(__file__)
 
-    object_name = "can"
-    # object_name = "book"
+    # object_name= "Lshape"
+    # object_name = "can"
+    object_name = "book"
     # object_name = "bottle"
+    # object_name = "Lshape"
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
@@ -1032,6 +1066,12 @@ if __name__ == '__main__':
 
         if pivotCornerPoint[0].shape[0] > 1: # when the pivoting edge is not sharp
 
+            # # show the visualization
+            # pickup_planner.showPivot(action, base)
+
+            # base.run()
+            # exit()
+
             rotatedplacementposelist = [placement1pose] + pivotCornerPoint[2] + [placement2pose]
             demoHelper.addEvent("closeGripper", 0)
             for l in range(pivotCornerPoint[0].shape[0]):
@@ -1041,7 +1081,7 @@ if __name__ == '__main__':
                 currentgrasp = [next_grasp, next_jawwidth]
                 currentplacement = pivotTrajectory[-1]
         else:
-            pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, [pivotCornerPoint[0][0], pivotCornerPoint[1]], pivotingGraspPoint)]
+            pivotTrajectory = [currentplacement.dot(np.linalg.inv(placement1pose)).dot(p) for p in pickup_planner.getPivotTrajectory(placement1pose, placement2pose, [pivotCornerPoint[0][0], pivotCornerPoint[1]] , pivotingGraspPoint)]
             demoHelper.addEvent("closeGripper", 0)
             demoHelper.addEvent("pivot", pivotTrajectory)
             currentgrasp = [next_grasp, next_jawwidth]
@@ -1072,8 +1112,8 @@ if __name__ == '__main__':
     else:
         print("can't move back")
 
-    liftuppose[0][3] += 300
-    pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
+    # liftuppose[0][3] += 500
+    # pickup_planner.showPickUp(base, liftuppose, input_grasp[0], input_grasp[1])
 
     #####################################################################################
     #                                  show the demo                                    #

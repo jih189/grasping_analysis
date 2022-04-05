@@ -209,6 +209,20 @@ try:
 except:
     db.rollback()
 
+sql = """insert into object(idobject, name) values (11,'Ushape')"""
+try:
+    cursor.execute(sql)
+    db.commit()
+except:
+    db.rollback()
+
+sql = """insert into object(idobject, name) values (12,'Hshape')"""
+try:
+    cursor.execute(sql)
+    db.commit()
+except:
+    db.rollback()
+
 sql = """insert into hand(idhand, name) values (0,'fetch')"""
 try:
     cursor.execute(sql)
