@@ -18,8 +18,19 @@ cursor.execute("drop table if exists grasps")
 cursor.execute("drop table if exists dmgedges")
 cursor.execute("drop table if exists targetgrasps")
 cursor.execute("drop table if exists initgrasps")
+cursor.execute("drop table if exists graspid2dmgid")
 
 # # create tables
+
+sql = """create table graspid2dmgid (
+                    graspid2dmgid int primary key auto_increment,
+                    idobject int,
+                    idfreeairgrip int,
+                    iddmg int
+                )"""
+
+cursor.execute(sql)
+
 sql = """create table initgrasps (
                     idinitgrasp int primary key auto_increment,
                     idobject int,
@@ -217,6 +228,20 @@ except:
     db.rollback()
 
 sql = """insert into object(idobject, name) values (12,'Hshape')"""
+try:
+    cursor.execute(sql)
+    db.commit()
+except:
+    db.rollback()
+
+sql = """insert into object(idobject, name) values (13,'triangle')"""
+try:
+    cursor.execute(sql)
+    db.commit()
+except:
+    db.rollback()
+
+sql = """insert into object(idobject, name) values (14,'Oshape')"""
 try:
     cursor.execute(sql)
     db.commit()

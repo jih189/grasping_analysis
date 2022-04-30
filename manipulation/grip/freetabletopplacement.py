@@ -97,11 +97,11 @@ class FreeTabletopPlacement(object):
         self.planebullnode = cd.genCollisionPlane(offset=0)
         self.bulletworldhp.attachRigidBody(self.planebullnode)
 
-        self.planebullnode1 = cd.genCollisionPlane(offset=3)
+        self.planebullnode1 = cd.genCollisionPlane(offset=-5)
         self.bulletworldhp1.attachRigidBody(self.planebullnode1)
 
         # according to your object, do not set this too high
-        self.planebullnode2 = cd.genCollisionPlane(offset=5)
+        self.planebullnode2 = cd.genCollisionPlane(offset=10)
         self.bulletworldhplowest.attachRigidBody(self.planebullnode2)
 
         self.handpkg = handpkg
@@ -531,7 +531,7 @@ class FreeTabletopPlacement(object):
                         tmphnd.reparentTo(base.render)
     
     def showAllFFPlacement(self, base):
-        distanceBetweenObjects = 400
+        distanceBetweenObjects = 1500
 
         numberOfPlacements = len(self.tpsffplacements)
         print("number of ff placements = ", numberOfPlacements)
@@ -582,7 +582,7 @@ class FreeTabletopPlacement(object):
         :return:
         """
 
-        distanceBetweenObjects = 200
+        distanceBetweenObjects = 500
 
         numberOfPlacements = len(self.tpsmat4s)
         tableSideLength = int(math.sqrt(numberOfPlacements)) + 1
@@ -650,6 +650,7 @@ class FreeTabletopPlacement(object):
                 # pandageom.plotSphere(base.render, pos=Point3(cct1[0] + tx * distanceBetweenObjects, cct1[1] + ty * distanceBetweenObjects, cct1[2]), radius=5, rgba=Vec4(1,0,0,1))
 
                 tmphnd.reparentTo(base.render)
+
                 
 
 
@@ -661,7 +662,7 @@ if __name__ == '__main__':
 
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "good_book.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
@@ -670,7 +671,9 @@ if __name__ == '__main__':
     # objpath = os.path.join(this_dir, "objects", "bottle.stl")
     # objpath = os.path.join(this_dir, "objects", "can.stl")
     # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
-    # objpath = os.path.join(this_dir, "objects", "Hshape.stl")
+    objpath = os.path.join(this_dir, "objects", "Hshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "triangle.stl")
+    # objpath = os.path.join(this_dir, "objects", "Oshape.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()

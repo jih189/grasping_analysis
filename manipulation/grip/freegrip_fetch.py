@@ -28,14 +28,14 @@ class Freegrip(fgcp.FreegripContactpairs):
         :param torqueresist: the maximum allowable distance to com (see FreegripContactpairs.planContactpairs)
         """
 
-        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=200, readser=readser)
+        super(self.__class__, self).__init__(ompath=objpath, numberOfSamplingPoints=50, readser=readser)
         if readser is False:
             # use this one to set the max and min distance from fingertips to the boundary
-            self.removeBadSamples(mindist=1, maxdist=10)
-            self.clusterFacetSamplesRNN(reduceRadius=3)
+            self.removeBadSamples(mindist=3, maxdist=10)
+            self.clusterFacetSamplesRNN(reduceRadius=7)
             # self.removeBadSamples(mindist=7, maxdist=25)
             # self.clusterFacetSamplesRNN(reduceRadius=8)
-            self.planContactpairs(torqueresist, fgrtipdist = 60)
+            self.planContactpairs(torqueresist, fgrtipdist = 30)
             # self.saveSerialized("tmpcp.pickle")
         else:
             pass
@@ -241,13 +241,19 @@ class Freegrip(fgcp.FreegripContactpairs):
         else:
             print("Grasps already saved or duplicated filename!")
 
+
     def plotObj(self):
+
+        pandageom.plotSphere(base.render, pos=Point3(0,0,0), radius=3, rgba=Vec4(1,0,0,1))
+
         geomnodeobj = GeomNode('obj')
         geomnodeobj.addGeom(self.objgeom)
         npnodeobj = NodePath('obj')
         npnodeobj.attachNewNode(geomnodeobj)
-        npnodeobj.setColor(Vec4(.8,0.8,0.8,1))
+        npnodeobj.setColor(Vec4(.8,0.8,0.8,0.4))
+        npnodeobj.setTransparency(TransparencyAttrib.MAlpha)
         npnodeobj.reparentTo(base.render)
+
 
     def showAllGrips(self):
         """
@@ -286,7 +292,7 @@ if __name__=='__main__':
 
     # objpath = os.path.join(this_dir, "objects", "cup.stl")
     # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    objpath = os.path.join(this_dir, "objects", "book.stl")
+    # objpath = os.path.join(this_dir, "objects", "book.stl")
     # objpath = os.path.join(this_dir, "objects", "box.stl")
     # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
     # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
@@ -294,7 +300,9 @@ if __name__=='__main__':
     # objpath = os.path.join(this_dir, "objects", "bottle.stl")
     # objpath = os.path.join(this_dir, "objects", "can.stl")
     # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
-    # objpath = os.path.join(this_dir, "objects", "Hshape.stl")
+    objpath = os.path.join(this_dir, "objects", "Hshape.stl")
+    # objpath = os.path.join(this_dir, "objects", "triangle.stl")
+    # objpath = os.path.join(this_dir, "objects", "Oshape.stl")
 
 
     handpkg = fetch_grippernm
