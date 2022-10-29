@@ -660,20 +660,7 @@ if __name__ == '__main__':
     # base = pandactrl.World(camp=[600,600,600], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
-    # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
-    # objpath = os.path.join(this_dir, "objects", "box.stl")
-    # objpath = os.path.join(this_dir, "objects", "good_book.stl")
-    # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
-    # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
-    # objpath = os.path.join(this_dir, "objects", "can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
-    objpath = os.path.join(this_dir, "objects", "Hshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "triangle.stl")
-    # objpath = os.path.join(this_dir, "objects", "Oshape.stl")
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     gdb = db.GraspDB()
@@ -684,8 +671,7 @@ if __name__ == '__main__':
         return task.cont
     
     tps.removebadfacets(base, doverh=.15)
-
-    tps.genFixturelessPlacement()
+    #tps.genFixturelessPlacement()
     tps.gentpsgrip(base)
     tps.saveToDB()
     

@@ -141,6 +141,15 @@ sql = """create table hand(
             )"""
 cursor.execute(sql)
 
+# add the robot's name and it to the table
+
+sql = """insert into hand(idhand, name) values (0,'fetch')"""
+try:
+    cursor.execute(sql)
+    db.commit()
+except:
+    db.rollback()
+
 # add the object's name and id to the table
 
 sql = """insert into object(idobject, name) values (0,'ttube')"""
@@ -247,14 +256,6 @@ try:
     db.commit()
 except:
     db.rollback()
-
-sql = """insert into hand(idhand, name) values (0,'fetch')"""
-try:
-    cursor.execute(sql)
-    db.commit()
-except:
-    db.rollback()
-
 
 db.close()
 

@@ -263,19 +263,17 @@ class Freegrip(fgcp.FreegripContactpairs):
         """
 
         for i in range(len(self.gripcontacts)):
-            # i = 2
             contactpair = self.gripcontacts[i]
             pandageom.plotSphere(base.render, pos=contactpair[0], radius=3, rgba=Vec4(1,0,0,1))
             pandageom.plotSphere(base.render, pos=contactpair[1], radius=3, rgba=Vec4(1,0,0,1))
 
-            # if i == 6:
             hndrotmat = self.griprotmats[i]
             hndjawwidth = self.gripjawwidth[i]
+
             # show grasps
             tmpfetch = fetch_grippernm.Fetch_gripperNM(hndcolor=[0, 0, 1, .5])
             tmpfetch.setMat(pandanpmat4=hndrotmat)
             tmpfetch.setJawwidth(hndjawwidth)
-            # tmpfetch.setJawwidth(80)
             tmpfetch.reparentTo(base.render)
 
             # pandageom.plotAxisSelf(base.render, spos=Vec3(hndrotmat.getCell(3,0),hndrotmat.getCell(3,1),hndrotmat.getCell(3,2)), pandamat4=hndrotmat)
@@ -290,20 +288,7 @@ if __name__=='__main__':
     base = pandactrl.World(camp=[700,300,700], lookatp=[0,0,0])
     this_dir, this_filename = os.path.split(__file__)
 
-    # objpath = os.path.join(this_dir, "objects", "cup.stl")
-    # objpath = os.path.join(this_dir, "objects", "cuboid.stl")
-    # objpath = os.path.join(this_dir, "objects", "book.stl")
-    # objpath = os.path.join(this_dir, "objects", "box.stl")
-    # objpath = os.path.join(this_dir, "objects", "cylinder.stl")
-    # objpath = os.path.join(this_dir, "objects", "almonds_can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Lshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "bottle.stl")
-    # objpath = os.path.join(this_dir, "objects", "can.stl")
-    # objpath = os.path.join(this_dir, "objects", "Ushape.stl")
-    objpath = os.path.join(this_dir, "objects", "Hshape.stl")
-    # objpath = os.path.join(this_dir, "objects", "triangle.stl")
-    # objpath = os.path.join(this_dir, "objects", "Oshape.stl")
-
+    objpath = os.path.join(this_dir, "objects", "bottle.stl")
 
     handpkg = fetch_grippernm
     freegriptst = Freegrip(objpath, handpkg, readser=False, torqueresist = 500)
