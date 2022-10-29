@@ -33,6 +33,10 @@ Assume you are in the grasping_analysis directory.
 8. generate possible stable placement with its feasible grasp pose
 	python freetabletopplacement.py
 
+9. you can access the database by
+	mysql -u cogrob -p
+	password: cogrob
+
 
 
 
