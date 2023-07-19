@@ -22,19 +22,49 @@ where the password is 'cogrob'
 
 -----------------------------------------------------------------------------------------------
 *** install related tools ***
-Install related tools by following commands:
+Install related tools by following commands(you may need to use python -m pip install):
+```
 	pip install Panda3D
 	pip install shapely
 	pip install Rtree
+	pip install networkx
+	pip install scikit-learn
+	apt install python-tk
 	apt install python-rtree
+```
+------------------------------------------------------------------------------------------------
+*** Only want the grasp poses over the object ***
+In this case, you do not need to install database, but you still need to install all related tools above.
+
+Assume you are in the grasping_analysis directory.
+
+1. To install this package, type 
+```
+python setup.py install --user
+```
+
+2. Save the mesh file as .stl format into manipulation/grip/objects directory.
+
+3. Enter manipulation/grip/generate_grasp_poses.py. Modify following code for your object
+```
+objpath = os.path.join(this_dir, "objects", "cup.stl")
+```
+by changing 'cup' to the name you want.
+
+4. run
+```
+python generate_grasp_poses.py
+```
+This script will generate a file [object].npz. In this file, it is a list of grasp poses in the object frame for fetch gripper.
 
 ------------------------------------------------------------------------------------------------
 *** generate placement and grasp poses ***
 Assume you are in the grasping_analysis directory.
 
-1. To install this package, type 
-	python setup.py install --user
-
+1. To install this package, type
+```
+python setup.py install --user
+```
 1. add the object name and id into the database by adding the following code before "db.close()"
 
 	sql = """insert into object(idobject, name) values ([#id],[object name])"""
